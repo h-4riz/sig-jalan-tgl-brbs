@@ -9,12 +9,18 @@ from shapely.ops import nearest_points
 from streamlit_js_eval import streamlit_js_eval
 
 # 1. TEMA & KONFIGURASI
-st.set_page_config(layout="wide", page_title="SIGAP Premier v8", page_icon="🛣️")
+st.set_page_config(layout="wide", page_title="SigapTeges", page_icon="🛣️")
 
 # Custom CSS: Perpaduan Kanvas Biru Terang & Metrik Premium Glow
 st.markdown("""
+    <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap');
 
+    /* Pastikan tidak ada teks di luar tag style ini */
+    
+    .stApp {
+        background: linear-gradient(135deg, #0077b6 0%, #00b4d8 100%) !important;
+        background-attachment: fixed;
     <style>
     /* 1. KANVAS UTAMA: BIRU TERANG VIBRANT */
     .stApp {
@@ -65,10 +71,10 @@ st.markdown("""
 
     /* Judul Kolom (NAMA RUAS / INFORMASI RUAS) */
     div[data-testid="stMetricLabel"] p {
-        font-size: 1.1rem !important;
+        font-size: 0.7rem !important;
         color: #fbbf24 !important; 
         font-weight: 800 !important;
-        letter-spacing: 1.2px !important;
+        letter-spacing: 1px !important;
         text-transform: uppercase;
     }
 
@@ -95,7 +101,12 @@ st.markdown("""
         border-radius: 20px;
         padding: 10px;
     }
-
+    /* Menghilangkan padding putih di paling atas dan menu dekoratif */
+    header {visibility: hidden;}
+    .main .block-container {padding-top: 1rem !important;}
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    }
     /* Sembunyikan Sidebar */
     [data-testid="stSidebar"] { display: none; }
     </style>
@@ -128,8 +139,8 @@ if 'daftar_laporan' not in st.session_state:
     st.session_state['daftar_laporan'] = []
 
 # 3. HEADER
-st.markdown("<h2>SIGAP PREMIER</h2>", unsafe_allow_html=True)
-st.markdown("<p style='color: #e0f2fe; margin-top:-15px; margin-bottom:25px; font-weight:600;'>Infrastructure Monitoring • Tegal - Brebes</p>", unsafe_allow_html=True)
+st.markdown("<h2>SIGAP TEGES</h2>", unsafe_allow_html=True)
+st.markdown("<p style='color: #e0f2fe; margin-top:-15px; margin-bottom:25px; font-weight:600;'>Sistem Informasi Geografis Jalan Provinsi (Ruas Kab. Tegal - Kab. Brebes)</p>", unsafe_allow_html=True)
 
 # 4. MENU NAVIGASI
 with st.container():
@@ -196,9 +207,10 @@ st.markdown('</div>', unsafe_allow_html=True)
 # 9. FORM LAPORAN & RIWAYAT
 st.write("")
 if is_snapped:
-    with st.expander("📝 BUAT LAPORAN GANGGUAN", expanded=False):
+    with st.expander("📝 BUAT LAPORAN KONDISI", expanded=False):
         with st.form("lapor_final", clear_on_submit=True):
-            tipe = st.selectbox("Jenis Masalah", ["Lubang Jalan", "Jalan Retak", "PJU Mati", "Drainase"])
+            tipe = st.selectbox("Jenis Masalah", ["Lubang Jalan", "Jalan Retak", "Jalan Amblas", "Masalah Drainase", "Bencana Alam"])
+            ket = st.text_input("Keterangan Tambahan", placeholder="Contoh: Kedalaman lubang ±10cm", max_chars=100)
             st.camera_input("Ambil Foto")
             if st.form_submit_button("KIRIM DATA"):
                 st.session_state.daftar_laporan.append({"Waktu": datetime.datetime.now().strftime("%H:%M"), "Ruas": atr['nama'], "Masalah": tipe})
