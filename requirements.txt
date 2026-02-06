@@ -1,0 +1,6 @@
+streamlit
+folium
+streamlit-folium
+streamlit-js-eval
+shapely
+pandas
