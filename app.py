@@ -9,81 +9,91 @@ from shapely.ops import nearest_points
 from streamlit_js_eval import streamlit_js_eval
 
 # 1. TEMA & KONFIGURASI
-st.set_page_config(layout="wide", page_title="SIGAP Premier", page_icon="🛣️")
+st.set_page_config(layout="wide", page_title="SIGAP Premier v8", page_icon="🛣️")
 
-# Custom CSS: Desain Ultra Modern Bahasa Indonesia
+# Custom CSS: Perpaduan Kanvas Biru Terang & Metrik Premium Glow
 st.markdown("""
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap');
 
     <style>
-    /* Gaya Global */
+    /* 1. KANVAS UTAMA: BIRU TERANG VIBRANT */
+    .stApp {
+        background: linear-gradient(135deg, #0077b6 0%, #00b4d8 100%) !important;
+        background-attachment: fixed;
+    }
+
+    /* 2. TYPOGRAPHY GLOBAL */
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
+        color: #ffffff;
     }
 
-    /* Background Gradasi Mewah */
-    .main { 
-        background: radial-gradient(circle at top right, #1e293b, #0f172a);
-        color: #f1f5f9;
-    }
-    
-    /* Proteksi Scrolling & Margin (Sisi Kanan Lebih Luas untuk Jempol) */
+    /* 3. PROTEKSI SCROLLING & MARGIN (Sisi kanan lebih luas untuk jempol) */
     .block-container { 
-        padding-left: 6% !important; 
-        padding-right: 12% !important; 
-        padding-top: 2rem !important; 
+        padding-left: 5% !important; 
+        padding-right: 15% !important; 
+        padding-top: 1.5rem !important; 
     }
     
-    /* Navigasi Transparan */
+    /* 4. NAVIGASI (MENU) ATAS */
     .nav-container {
-        background: rgba(30, 41, 59, 0.7);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 18px;
         border-radius: 24px;
         margin-bottom: 25px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
     }
     
-    /* Judul Bergradasi Emas */
+    /* 5. JUDUL UTAMA EMAS */
     h2 { 
-        font-weight: 800 !important; 
+        font-weight: 900 !important; 
+        color: #fbbf24 !important;
+        text-shadow: 2px 2px 8px rgba(0,0,0,0.2);
         letter-spacing: -1px;
-        background: linear-gradient(to right, #fbbf24, #f59e0b);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
     }
     
-    /* Styling Metrik */
+    /* 6. STYLE METRIK: PERSIS SEPERTI GAMBAR (GOLD GLOW) */
     div[data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 20px;
-        padding: 15px !important;
-        border: 1px solid rgba(251, 191, 36, 0.3);
-    }
-    div[data-testid="stMetricValue"] { font-size: 1.1rem !important; color: #fbbf24 !important; font-weight: 700; }
-    div[data-testid="stMetricLabel"] { font-size: 0.75rem !important; color: #94a3b8 !important; text-transform: uppercase; }
-    
-    /* Container Peta */
-    .map-wrapper {
-        border-radius: 28px;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        background: rgba(15, 23, 42, 0.3) !important; 
+        border-radius: 24px;
+        padding: 25px !important;
+        border: 2px solid #fbbf24 !important; /* Border Emas Menyala */
+        box-shadow: 0 0 20px rgba(251, 191, 36, 0.4); /* Efek Glow */
     }
 
-    /* Tombol Premium */
-    .stButton>button { 
-        border-radius: 16px; 
-        background: #fbbf24;
-        color: #0f172a !important;
-        font-weight: 700;
-        border: none;
-        transition: all 0.3s;
+    /* Judul Kolom (NAMA RUAS / INFORMASI RUAS) */
+    div[data-testid="stMetricLabel"] p {
+        font-size: 1.1rem !important;
+        color: #fbbf24 !important; 
+        font-weight: 800 !important;
+        letter-spacing: 1.2px !important;
+        text-transform: uppercase;
     }
-    .stButton>button:hover { 
-        transform: translateY(-2px);
-        box-shadow: 0 8px 15px rgba(251, 191, 36, 0.4);
+
+    /* Isi Kolom (Isi Data) - PUTIH BERSIH & RAKSASA */
+    div[data-testid="stMetricValue"] {
+        font-size: 2.2rem !important; 
+        color: #ffffff !important;   
+        font-weight: 900 !important;
+        line-height: 1.1;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    /* 7. BINGKAI PETA */
+    .map-wrapper {
+        border-radius: 30px;
+        overflow: hidden;
+        border: 3px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+
+    /* 8. TABEL DATA (DATAFRAME) */
+    [data-testid="stDataFrame"] {
+        background: white;
+        border-radius: 20px;
+        padding: 10px;
     }
 
     /* Sembunyikan Sidebar */
@@ -91,10 +101,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. INISIALISASI DATA
-if 'daftar_laporan' not in st.session_state:
-    st.session_state['daftar_laporan'] = []
-
+# 2. DATA ATRIBUT (Kamus Manual)
 DATA_ATRIBUT = {
     "Jalan Provinsi_1": {"nama": "Jl. Raya Jatinegara - Slawi", "no": "056", "km": "KM 10+000 - 15+000"},
     "Jalan Provinsi_2": {"nama": "Jl. Raya Slawi - Jatibarang", "no": "057", "km": "KM 05+200"},
@@ -117,11 +124,14 @@ def load_data():
     except: return None
 
 data_jalan = load_data()
+if 'daftar_laporan' not in st.session_state:
+    st.session_state['daftar_laporan'] = []
 
-# 3. HEADER & NAVIGASI
+# 3. HEADER
 st.markdown("<h2>SIGAP PREMIER</h2>", unsafe_allow_html=True)
-st.markdown("<p style='color: #64748b; margin-top:-15px; margin-bottom:25px;'>Sistem Monitoring Infrastruktur • Tegal - Brebes</p>", unsafe_allow_html=True)
+st.markdown("<p style='color: #e0f2fe; margin-top:-15px; margin-bottom:25px; font-weight:600;'>Infrastructure Monitoring • Tegal - Brebes</p>", unsafe_allow_html=True)
 
+# 4. MENU NAVIGASI
 with st.container():
     st.markdown('<div class="nav-container">', unsafe_allow_html=True)
     col_m1, col_m2, col_m3 = st.columns([1, 1, 0.7])
@@ -135,15 +145,15 @@ with st.container():
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# 4. LOGIKA GPS
+# 5. LOGIKA GPS
 if mode_lokasi == "Mode Simulasi":
     loc = [-6.9833, 109.1333]
 else:
-    loc = streamlit_js_eval(js_expressions='new Promise((resolve) => { navigator.geolocation.getCurrentPosition((p) => resolve([p.coords.latitude, p.coords.longitude]), (e) => resolve(e.code), {enableHighAccuracy:true, timeout:5000}); })', key='gps_v7_indo')
+    loc = streamlit_js_eval(js_expressions='new Promise((resolve) => { navigator.geolocation.getCurrentPosition((p) => resolve([p.coords.latitude, p.coords.longitude]), (e) => resolve(e.code), {enableHighAccuracy:true, timeout:5000}); })', key='gps_vfinal')
 
-# 5. MESIN ANALISIS
+# 6. ANALISIS POSISI
 user_lat, user_lon = (loc[0], loc[1]) if isinstance(loc, list) else (-6.98, 109.13)
-display_lat, display_lon, is_snapped, closest_feature, min_dist = user_lat, user_lon, False, None, 0
+display_lat, display_lon, is_snapped, closest_feature = user_lat, user_lon, False, None
 
 if isinstance(loc, list) and data_jalan:
     user_point = Point(user_lon, user_lat)
@@ -153,22 +163,21 @@ if isinstance(loc, list) and data_jalan:
         dist = shape(f['geometry']).distance(user_point) * 111.32
         if dist < min_dist_val:
             min_dist_val, target_f = dist, f
-    min_dist, closest_feature = min_dist_val, target_f
-    if min_dist < 0.2:
-        p1, _ = nearest_points(shape(closest_feature['geometry']), user_point)
-        display_lat, display_lon, is_snapped = p1.y, p1.x, True
+    if min_dist_val < 0.2:
+        p1, _ = nearest_points(shape(target_f['geometry']), user_point)
+        display_lat, display_lon, is_snapped, closest_feature = p1.y, p1.x, True, target_f
 
-# 6. METRIK DASHBOARD
+# 7. DASHBOARD INFO (PREMIUM METRICS)
 id_geo = closest_feature['properties'].get('KML_FOLDER', '-') if closest_feature else "-"
-atr = DATA_ATRIBUT.get(id_geo, {"nama": id_geo, "no": "-", "km": "-"})
+atr = DATA_ATRIBUT.get(id_geo, {"nama": "DI LUAR JANGKAUAN", "no": "-", "km": "-"})
 
 c1, c2 = st.columns(2)
 with c1:
-    st.metric("NAMA RUAS", atr['nama'] if is_snapped else "DI LUAR JALAN")
+    st.metric("NAMA RUAS", atr['nama'] if is_snapped else "CARI JALAN...")
 with c2:
-    st.metric("INFORMASI RUAS", f"No: {atr['no']} • {atr['km']}")
+    st.metric("INFORMASI RUAS", f"ID: {atr['no']} • {atr['km']}")
 
-# 7. BAGIAN PETA
+# 8. PETA
 st.markdown('<div class="map-wrapper">', unsafe_allow_html=True)
 tiles = "OpenStreetMap"
 if mode_peta == "Satelit":
@@ -178,34 +187,23 @@ elif mode_peta == "Gelap":
 
 m = folium.Map(location=[display_lat, display_lon], zoom_start=17 if is_snapped else 12, tiles=tiles, attr="Google" if "Satelit" in mode_peta else None)
 if data_jalan:
-    folium.GeoJson(data_jalan, style_function=lambda x: {'color': '#fbbf24', 'weight': 6, 'opacity': 0.6}).add_to(m)
+    folium.GeoJson(data_jalan, style_function=lambda x: {'color': '#fbbf24', 'weight': 7, 'opacity': 0.8}).add_to(m)
+folium.Marker([display_lat, display_lon], icon=folium.Icon(color='orange' if is_snapped else 'red', icon='circle-dot', prefix='fa')).add_to(m)
 
-folium.Marker(
-    [display_lat, display_lon], 
-    icon=folium.Icon(color='orange' if is_snapped else 'red', icon='circle-dot', prefix='fa')
-).add_to(m)
-
-st_folium(m, width="100%", height=420, key=f"map_lux_indo_{id_geo}_{display_lat}")
+st_folium(m, width="100%", height=450, key=f"map_final_{id_geo}_{display_lat}")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 8. AREA PELAPORAN
+# 9. FORM LAPORAN & RIWAYAT
 st.write("")
 if is_snapped:
-    with st.expander("📝 BUAT LAPORAN BARU", expanded=False):
-        with st.form("lapor_lux_indo", clear_on_submit=True):
-            tipe = st.selectbox("Jenis Gangguan", ["Lubang Jalan", "Jalan Retak", "PJU Mati", "Drainase Rusak"])
-            foto = st.camera_input("Ambil Foto Bukti")
-            if st.form_submit_button("KIRIM LAPORAN SEKARANG"):
-                st.session_state.daftar_laporan.append({
-                    "Waktu": datetime.datetime.now().strftime("%H:%M"),
-                    "Ruas": atr['nama'],
-                    "Masalah": tipe
-                })
-                st.toast("Data berhasil disinkronkan!", icon="✨")
-else:
-    st.info("Dekati ruas jalan provinsi untuk mengaktifkan form laporan.")
+    with st.expander("📝 BUAT LAPORAN GANGGUAN", expanded=False):
+        with st.form("lapor_final", clear_on_submit=True):
+            tipe = st.selectbox("Jenis Masalah", ["Lubang Jalan", "Jalan Retak", "PJU Mati", "Drainase"])
+            st.camera_input("Ambil Foto")
+            if st.form_submit_button("KIRIM DATA"):
+                st.session_state.daftar_laporan.append({"Waktu": datetime.datetime.now().strftime("%H:%M"), "Ruas": atr['nama'], "Masalah": tipe})
+                st.toast("Tersimpan!")
 
-# 9. RIWAYAT DATA
 if st.session_state.daftar_laporan:
-    st.write("### 📋 Riwayat Laporan")
+    st.write("### 📋 Log Aktivitas")
     st.dataframe(pd.DataFrame(st.session_state.daftar_laporan), use_container_width=True)
