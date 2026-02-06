@@ -9,7 +9,7 @@ from shapely.ops import nearest_points
 from streamlit_js_eval import streamlit_js_eval
 
 # 1. TEMA & KONFIGURASI
-st.set_page_config(layout="wide", page_title="SigapTeges", page_icon="🛣️")
+st.set_page_config(layout="wide", page_title="SigapTeges", page_icon="logo.jpg")
 
 # Custom CSS: Perpaduan Kanvas Biru Terang & Metrik Premium Glow
 st.markdown("""
