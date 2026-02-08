@@ -54,7 +54,7 @@ st.markdown("""
     
     /* 5. JUDUL UTAMA EMAS */
     h2 { 
-        font-weight: 900 !important; 
+        font-weight: 1200 !important; 
         color: #fbbf24 !important;
         text-shadow: 2px 2px 8px rgba(0,0,0,0.2);
         letter-spacing: -1px;
@@ -71,8 +71,8 @@ st.markdown("""
 
     /* Judul Kolom (NAMA RUAS / INFORMASI RUAS) */
     div[data-testid="stMetricLabel"] p {
-        font-size: 0.7rem !important;
-        color: #fbbf24 !important; 
+        font-size: 1.3rem !important;
+        color: #ffffff !important; 
         font-weight: 800 !important;
         letter-spacing: 1px !important;
         text-transform: uppercase;
@@ -80,7 +80,7 @@ st.markdown("""
 
     /* Isi Kolom (Isi Data) - PUTIH BERSIH & RAKSASA */
     div[data-testid="stMetricValue"] {
-        font-size: 2.2rem !important; 
+        font-size: 1.2rem !important; 
         color: #ffffff !important;   
         font-weight: 900 !important;
         line-height: 1.1;
