@@ -64,7 +64,7 @@ st.markdown("""
     div[data-testid="stMetric"] {
         background: rgba(15, 23, 42, 0.3) !important; 
         border-radius: 18px;
-        padding: 20px !important;
+        padding: 10px !important;
         border: 2px solid #fbbf24 !important; /* Border Emas Menyala */
         box-shadow: 0 0 20px rgba(251, 191, 36, 0.4); /* Efek Glow */
     }
@@ -150,10 +150,7 @@ with st.container():
         mode_peta = st.selectbox("TAMPILAN", ["Jalan", "Satelit", "Gelap"], label_visibility="collapsed")
     with col_m2:
         mode_lokasi = st.selectbox("SENSOR", ["Mode Simulasi", "GPS Langsung"], label_visibility="collapsed")
-    with col_m3:
-        if st.button("HAPUS DATA", use_container_width=True):
-            st.session_state['daftar_laporan'] = []
-            st.rerun()
+   
     st.markdown('</div>', unsafe_allow_html=True)
 
 # 5. LOGIKA GPS
@@ -211,10 +208,37 @@ if is_snapped:
         with st.form("lapor_final", clear_on_submit=True):
             tipe = st.selectbox("Jenis Masalah", ["Lubang Jalan", "Jalan Retak", "Jalan Amblas", "Masalah Drainase", "Bencana Alam"])
             ket = st.text_input("Keterangan Tambahan", placeholder="Contoh: Kedalaman lubang ±10cm", max_chars=100)
-            st.camera_input("Ambil Foto")
-            if st.form_submit_button("KIRIM DATA"):
-                st.session_state.daftar_laporan.append({"Waktu": datetime.datetime.now().strftime("%H:%M"), "Ruas": atr['nama'], "Masalah": tipe})
-                st.toast("Tersimpan!")
+            
+            # Camera input (ini akan otomatis terhapus jika clear_on_submit=True)
+            foto = st.camera_input("Ambil Foto")
+            
+            # Membuat kolom untuk menaruh tombol berdampingan
+            col_tombol1, col_tombol2 = st.columns(2)
+            
+            with col_tombol1:
+                submit = st.form_submit_button("KIRIM DATA", use_container_width=True)
+            
+            with col_tombol2:
+                # Tombol Reset bawaan form untuk mengosongkan isian
+                reset = st.form_submit_button("HAPUS ISIAN", use_container_width=True)
+
+            if submit:
+                # Logika Simpan
+                st.session_state.daftar_laporan.append({
+                    "Waktu": datetime.datetime.now().strftime("%H:%M"), 
+                    "Ruas": atr['nama'], 
+                    "Masalah": tipe,
+                    "Keterangan": ket
+                })
+                st.toast("Laporan Tersimpan!", icon="✅")
+                st.rerun()
+
+            if reset:
+                # Karena clear_on_submit=True, menekan tombol submit apa pun di form 
+                # akan mengosongkan isian. Jadi tombol "HAPUS ISIAN" cukup 
+                # memicu rerun tanpa melakukan append data.
+                st.toast("Isian telah dibersihkan")
+                st.rerun()
 
 if st.session_state.daftar_laporan:
     st.write("### 📋 Log Aktivitas")
