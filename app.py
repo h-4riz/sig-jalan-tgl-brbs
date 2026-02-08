@@ -7,6 +7,26 @@ import datetime
 from shapely.geometry import shape, Point
 from shapely.ops import nearest_points
 from streamlit_js_eval import streamlit_js_eval
+import requests
+
+def kirim_laporan_lengkap(pesan, file_foto=None):
+    token = "8503287678:AAGKbaFu_x_Jk83GyU8icXzwYst90A9lElM"  
+    chat_id = "-1003872298900"  
+    
+    try:
+        if file_foto:
+            # Jika ada foto, kirim menggunakan sendPhoto
+            url = f"https://api.telegram.org/bot{token}/sendPhoto"
+            files = {'photo': file_foto.getvalue()}
+            payload = {"chat_id": chat_id, "caption": pesan, "parse_mode": "Markdown"}
+            requests.post(url, data=payload, files=files)
+        else:
+            # Jika tidak ada foto, kirim pesan teks saja
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            payload = {"chat_id": chat_id, "text": pesan, "parse_mode": "Markdown"}
+            requests.post(url, data=payload)
+    except Exception as e:
+        st.error(f"Gagal kirim ke Telegram: {e}")
 
 # 1. TEMA & KONFIGURASI
 st.set_page_config(layout="wide", page_title="SigapTeges", page_icon="logo.jpg")
@@ -223,16 +243,44 @@ if is_snapped:
                 reset = st.form_submit_button("HAPUS ISIAN", use_container_width=True)
 
             if submit:
-                # Logika Simpan
+                waktu_sekarang = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+                lat = atr.get('lat') or atr.get('LATITUDE') or atr.get('latitude') or 0
+                lon = atr.get('lon') or atr.get('LONGITUDE') or atr.get('longitude') or 0
+
+                # Buat link hanya jika koordinat ditemukan
+                if lat != 0 and lon != 0:
+                    link_map = f"https://www.google.com/maps?q={lat},{lon}"
+                    lokasi_text = f"🌐 [Buka di Google Maps]({link_map})"
+                else:
+                    lokasi_text = "🌐 _Lokasi tidak terdeteksi_"
+                
+                # 1. Simpan ke database lokal aplikasi
                 st.session_state.daftar_laporan.append({
-                    "Waktu": datetime.datetime.now().strftime("%H:%M"), 
+                    "Waktu": waktu_sekarang, 
                     "Ruas": atr['nama'], 
                     "Masalah": tipe,
                     "Keterangan": ket
                 })
-                st.toast("Laporan Tersimpan!", icon="✅")
-                st.rerun()
 
+                # 2. Susun Pesan untuk Telegram
+                pesan_bot = (
+                    f"🚨 *LAPORAN KONDISI JALAN*\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📍 *Ruas:* {atr.get('nama', 'Tidak Diketahui')}\n"
+                    f"🆔 *No. Ruas:* {atr['no']}\n"
+                    f"⚠️ *Kondisi:* {tipe}\n"
+                    f"📝 *Keterangan:* {ket if ket else '-'}\n"
+                    f"⏰ *Waktu:* {waktu_sekarang}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👉 _Laporan dari SIGAP TEGES Mobile_"
+                )
+
+                # 3. Eksekusi Kirim (Pesan + Foto)
+                with st.spinner("Sedang mengirim ke Telegram..."):
+                    kirim_laporan_lengkap(pesan_bot, foto)
+                
+                st.toast("Laporan & Foto Berhasil Terkirim!", icon="🚀")
+                st.rerun()
             if reset:
                 # Karena clear_on_submit=True, menekan tombol submit apa pun di form 
                 # akan mengosongkan isian. Jadi tombol "HAPUS ISIAN" cukup 
