@@ -1,6 +1,8 @@
 streamlit
 folium
 streamlit-folium
-streamlit-js-eval
-shapely
 pandas
+shapely
+streamlit-js_eval
+requests
+st-gsheets-connection
