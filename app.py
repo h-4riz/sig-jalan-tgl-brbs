@@ -63,24 +63,24 @@ st.markdown("""
     /* 6. STYLE METRIK: PERSIS SEPERTI GAMBAR (GOLD GLOW) */
     div[data-testid="stMetric"] {
         background: rgba(15, 23, 42, 0.3) !important; 
-        border-radius: 24px;
-        padding: 25px !important;
+        border-radius: 18px;
+        padding: 20px !important;
         border: 2px solid #fbbf24 !important; /* Border Emas Menyala */
         box-shadow: 0 0 20px rgba(251, 191, 36, 0.4); /* Efek Glow */
     }
 
     /* Judul Kolom (NAMA RUAS / INFORMASI RUAS) */
     div[data-testid="stMetricLabel"] p {
-        font-size: 1.3rem !important;
+        font-size: 1.0rem !important;
         color: #ffffff !important; 
-        font-weight: 800 !important;
+        font-weight: 900 !important;
         letter-spacing: 1px !important;
         text-transform: uppercase;
     }
 
     /* Isi Kolom (Isi Data) - PUTIH BERSIH & RAKSASA */
     div[data-testid="stMetricValue"] {
-        font-size: 1.2rem !important; 
+        font-size: 0.8rem !important; 
         color: #ffffff !important;   
         font-weight: 900 !important;
         line-height: 1.1;
