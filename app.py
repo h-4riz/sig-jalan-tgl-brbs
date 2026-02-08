@@ -12,22 +12,23 @@ from streamlit_gsheets import GSheetsConnection
 
 # 0. FUNGSI KIRIM TELEGRAM (VERSI AMAN)
 def kirim_laporan_lengkap(pesan, file_foto=None):
-    # Mengambil token dari .streamlit/secrets.toml atau Streamlit Cloud Settings
     token = st.secrets["TELEGRAM_TOKEN"]
-    chat_id = st.secrets["TELEGRAM_CHAT_ID"]
+    chat_id = str(st.secrets["TELEGRAM_CHAT_ID"]) # Paksa jadi string
     
     try:
         if file_foto:
             url = f"https://api.telegram.org/bot{token}/sendPhoto"
             files = {'photo': file_foto.getvalue()}
-            payload = {"chat_id": chat_id, "caption": pesan, "parse_mode": "Markdown"}
-            requests.post(url, data=payload, files=files)
+            # Gunakan timeout agar aplikasi tidak menggantung jika sinyal buruk
+            res = requests.post(url, data={"chat_id": chat_id, "caption": pesan}, files=files, timeout=10)
         else:
             url = f"https://api.telegram.org/bot{token}/sendMessage"
-            payload = {"chat_id": chat_id, "text": pesan, "parse_mode": "Markdown"}
-            requests.post(url, data=payload)
+            res = requests.post(url, data={"chat_id": chat_id, "text": pesan}, timeout=10)
+        
+        return res.status_code == 200
     except Exception as e:
-        st.error(f"Gagal kirim ke Telegram: {e}")
+        st.error(f"Gagal kirim: {e}")
+        return False
 
 # 1. TEMA & KONFIGURASI
 st.set_page_config(layout="wide", page_title="SigapTeges", page_icon="logo.jpg")
@@ -160,29 +161,57 @@ with st.expander("📝 BUAT LAPORAN KONDISI", expanded=True):
             waktu = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
             link_map = f"https://www.google.com/maps?q={display_lat},{display_lon}"
             
-            # --- SIMPAN KE GOOGLE SHEETS ---
-            try:
-                existing_df = conn.read(worksheet="Sheet1")
-                new_data = pd.DataFrame([{"Waktu": waktu, "Ruas": atr['nama'], "No_Ruas": atr['no'], "KM": atr['km'], "Masalah": tipe, "Keterangan": ket, "Status": "⏳ Menunggu", "Link_Maps": link_map}])
-                updated_df = pd.concat([existing_df, new_data], ignore_index=True)
-                conn.update(worksheet="Sheet1", data=updated_df)
-            except Exception as e: st.warning(f"GSheets Error: {e}")
+            # Gunakan st.status agar kita bisa melihat di mana macetnya
+            with st.status("Sedang memproses laporan...", expanded=True) as status:
+                
+                # 1. Simpan ke database lokal session (untuk tabel di bawah)
+                st.write("Menyimpan ke histori lokal...")
+                st.session_state.daftar_laporan.append({
+                    "Waktu": waktu, 
+                    "Ruas": atr['nama'], 
+                    "Masalah": tipe, 
+                    "Status": "⏳ Menunggu"
+                })
 
-            # --- KIRIM KE TELEGRAM ---
-            pesan_bot = (
-                f"🚨 *LAPORAN KONDISI JALAN*\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"📍 *Ruas:* {atr['nama']}\n"
-                f"🆔 *No. Ruas:* {atr['no']}\n"
-                f"⚠️ *Kondisi:* {tipe}\n"
-                f"📝 *Ket:* {ket if ket else '-'}\n"
-                f"🕒 *Status:* ⏳ Menunggu\n"
-                f"⏰ *Waktu:* {waktu}\n"
-                f"🌐 [Lihat di Google Maps]({link_map})\n"
-                f"━━━━━━━━━━━━━━━━━━━━"
-            )
-            with st.spinner("Mengirim laporan..."):
-                kirim_laporan_lengkap(pesan_bot, foto)
+                # 2. Susun Pesan (Tanpa karakter aneh dulu untuk memastikan)
+                pesan_bot = (
+                    f"🚨 LAPORAN KONDISI JALAN\n"
+                    f"Ruas: {atr['nama']}\n"
+                    f"Kondisi: {tipe}\n"
+                    f"Waktu: {waktu}\n"
+                    f"Link Maps: {link_map}"
+                )
+
+                # 3. Kirim ke Telegram
+                st.write("Menghubungi Bot Telegram...")
+                try:
+                    # Kita panggil langsung di sini untuk memastikan eksekusi
+                    token = st.secrets["TELEGRAM_TOKEN"]
+                    chat_id = st.secrets["TELEGRAM_CHAT_ID"]
+                    
+                    if foto:
+                        url = f"https://api.telegram.org/bot{token}/sendPhoto"
+                        files = {'photo': foto.getvalue()}
+                        payload = {"chat_id": chat_id, "caption": pesan_bot}
+                        res = requests.post(url, data=payload, files=files)
+                    else:
+                        url = f"https://api.telegram.org/bot{token}/sendMessage"
+                        payload = {"chat_id": chat_id, "text": pesan_bot}
+                        res = requests.post(url, data=payload)
+                    
+                    if res.status_code == 200:
+                        st.write("✅ Telegram: Terkirim!")
+                    else:
+                        st.error(f"❌ Telegram Gagal: {res.text}")
+                
+                except Exception as e:
+                    st.error(f"❌ Kesalahan Sistem: {e}")
+
+                status.update(label="Laporan Selesai Diproses!", state="complete", expanded=False)
+            
+            # Beri jeda sedikit agar user bisa melihat status sukses sebelum refresh
+            st.toast("Laporan Berhasil!", icon="🚀")
+            # st.rerun() # Matikan dulu rerun-nya untuk tes ini
             
             st.session_state.daftar_laporan.append({"Waktu": waktu, "Ruas": atr['nama'], "Masalah": tipe, "Status": "⏳ Menunggu"})
             st.toast("Laporan Berhasil Terkirim!", icon="🚀")
