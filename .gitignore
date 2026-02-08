@@ -1,0 +1,22 @@
+# Streamlit Secrets (WAJIB)
+.streamlit/secrets.toml
+
+# Python Virtual Environment
+venv/
+.env
+env/
+ENV/
+
+# Python Cache & Metadata
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# Data Local (Opsional)
+# Jika kamu tidak ingin mengunggah file geojson, buka tanda pagarnya:
+# jalan_tegal_brebes.geojson
