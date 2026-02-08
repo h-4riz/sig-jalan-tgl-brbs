@@ -8,20 +8,21 @@ from shapely.geometry import shape, Point
 from shapely.ops import nearest_points
 from streamlit_js_eval import streamlit_js_eval
 import requests
+from streamlit_gsheets import GSheetsConnection
 
+# 0. FUNGSI KIRIM TELEGRAM (VERSI AMAN)
 def kirim_laporan_lengkap(pesan, file_foto=None):
-    token = "8503287678:AAGKbaFu_x_Jk83GyU8icXzwYst90A9lElM"  
-    chat_id = "-1003872298900"  
+    # Mengambil token dari .streamlit/secrets.toml atau Streamlit Cloud Settings
+    token = st.secrets["TELEGRAM_TOKEN"]
+    chat_id = st.secrets["TELEGRAM_CHAT_ID"]
     
     try:
         if file_foto:
-            # Jika ada foto, kirim menggunakan sendPhoto
             url = f"https://api.telegram.org/bot{token}/sendPhoto"
             files = {'photo': file_foto.getvalue()}
             payload = {"chat_id": chat_id, "caption": pesan, "parse_mode": "Markdown"}
             requests.post(url, data=payload, files=files)
         else:
-            # Jika tidak ada foto, kirim pesan teks saja
             url = f"https://api.telegram.org/bot{token}/sendMessage"
             payload = {"chat_id": chat_id, "text": pesan, "parse_mode": "Markdown"}
             requests.post(url, data=payload)
@@ -31,103 +32,24 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
 # 1. TEMA & KONFIGURASI
 st.set_page_config(layout="wide", page_title="SigapTeges", page_icon="logo.jpg")
 
-# Custom CSS: Perpaduan Kanvas Biru Terang & Metrik Premium Glow
+# Inisialisasi Koneksi Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# Custom CSS
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap');
-
-    /* Pastikan tidak ada teks di luar tag style ini */
-    
-    .stApp {
-        background: linear-gradient(135deg, #0077b6 0%, #00b4d8 100%) !important;
-        background-attachment: fixed;
-    <style>
-    /* 1. KANVAS UTAMA: BIRU TERANG VIBRANT */
-    .stApp {
-        background: linear-gradient(135deg, #0077b6 0%, #00b4d8 100%) !important;
-        background-attachment: fixed;
-    }
-
-    /* 2. TYPOGRAPHY GLOBAL */
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-        color: #ffffff;
-    }
-
-    /* 3. PROTEKSI SCROLLING & MARGIN (Sisi kanan lebih luas untuk jempol) */
-    .block-container { 
-        padding-left: 5% !important; 
-        padding-right: 15% !important; 
-        padding-top: 1.5rem !important; 
-    }
-    
-    /* 4. NAVIGASI (MENU) ATAS */
-    .nav-container {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(15px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        padding: 18px;
-        border-radius: 24px;
-        margin-bottom: 25px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    }
-    
-    /* 5. JUDUL UTAMA EMAS */
-    h2 { 
-        font-weight: 1200 !important; 
-        color: #fbbf24 !important;
-        text-shadow: 2px 2px 8px rgba(0,0,0,0.2);
-        letter-spacing: -1px;
-    }
-    
-    /* 6. STYLE METRIK: PERSIS SEPERTI GAMBAR (GOLD GLOW) */
-    div[data-testid="stMetric"] {
-        background: rgba(15, 23, 42, 0.3) !important; 
-        border-radius: 18px;
-        padding: 10px !important;
-        border: 2px solid #fbbf24 !important; /* Border Emas Menyala */
-        box-shadow: 0 0 20px rgba(251, 191, 36, 0.4); /* Efek Glow */
-    }
-
-    /* Judul Kolom (NAMA RUAS / INFORMASI RUAS) */
-    div[data-testid="stMetricLabel"] p {
-        font-size: 1.0rem !important;
-        color: #ffffff !important; 
-        font-weight: 900 !important;
-        letter-spacing: 1px !important;
-        text-transform: uppercase;
-    }
-
-    /* Isi Kolom (Isi Data) - PUTIH BERSIH & RAKSASA */
-    div[data-testid="stMetricValue"] {
-        font-size: 0.8rem !important; 
-        color: #ffffff !important;   
-        font-weight: 900 !important;
-        line-height: 1.1;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    /* 7. BINGKAI PETA */
-    .map-wrapper {
-        border-radius: 30px;
-        overflow: hidden;
-        border: 3px solid rgba(255, 255, 255, 0.5);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-    }
-
-    /* 8. TABEL DATA (DATAFRAME) */
-    [data-testid="stDataFrame"] {
-        background: white;
-        border-radius: 20px;
-        padding: 10px;
-    }
-    /* Menghilangkan padding putih di paling atas dan menu dekoratif */
-    header {visibility: hidden;}
-    .main .block-container {padding-top: 1rem !important;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    }
-    /* Sembunyikan Sidebar */
+    .stApp { background: linear-gradient(135deg, #0077b6 0%, #00b4d8 100%) !important; background-attachment: fixed; }
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #ffffff; }
+    .block-container { padding: 1.5rem 5% !important; }
+    .nav-container { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.2); padding: 18px; border-radius: 24px; margin-bottom: 25px; }
+    h2 { font-weight: 1200 !important; color: #fbbf24 !important; text-shadow: 2px 2px 8px rgba(0,0,0,0.2); }
+    div[data-testid="stMetric"] { background: rgba(15, 23, 42, 0.3) !important; border-radius: 18px; padding: 10px !important; border: 2px solid #fbbf24 !important; box-shadow: 0 0 20px rgba(251, 191, 36, 0.4); }
+    div[data-testid="stMetricLabel"] p { font-size: 0.9rem !important; color: #ffffff !important; font-weight: 900 !important; text-transform: uppercase; }
+    div[data-testid="stMetricValue"] { font-size: 1rem !important; color: #ffffff !important; font-weight: 900 !important; }
+    .map-wrapper { border-radius: 30px; overflow: hidden; border: 3px solid rgba(255, 255, 255, 0.5); }
+    [data-testid="stDataFrame"] { background: white; border-radius: 20px; padding: 10px; }
+    header, #MainMenu, footer {visibility: hidden;}
     [data-testid="stSidebar"] { display: none; }
     </style>
     """, unsafe_allow_html=True)
@@ -160,17 +82,14 @@ if 'daftar_laporan' not in st.session_state:
 
 # 3. HEADER
 st.markdown("<h2>SIGAP TEGES</h2>", unsafe_allow_html=True)
-st.markdown("<p style='color: #e0f2fe; margin-top:-15px; margin-bottom:25px; font-weight:600;'>Sistem Informasi Geografis Jalan Provinsi (Ruas Kab. Tegal - Kab. Brebes)</p>", unsafe_allow_html=True)
+st.markdown("<p style='color: #e0f2fe; margin-top:-15px; margin-bottom:25px; font-weight:600;'>Sistem Informasi Geografis Jalan Provinsi (Ruas Kab. Tegal dan Kab. Brebes)</p>", unsafe_allow_html=True)
 
 # 4. MENU NAVIGASI
 with st.container():
     st.markdown('<div class="nav-container">', unsafe_allow_html=True)
-    col_m1, col_m2, col_m3 = st.columns([1, 1, 0.7])
-    with col_m1:
-        mode_peta = st.selectbox("TAMPILAN", ["Jalan", "Satelit", "Gelap"], label_visibility="collapsed")
-    with col_m2:
-        mode_lokasi = st.selectbox("SENSOR", ["Mode Simulasi", "GPS Langsung"], label_visibility="collapsed")
-   
+    c_m1, c_m2 = st.columns(2)
+    with c_m1: mode_peta = st.selectbox("TAMPILAN", ["Jalan", "Satelit", "Gelap"], label_visibility="collapsed")
+    with c_m2: mode_lokasi = st.selectbox("SENSOR", ["Mode Simulasi", "GPS Langsung"], label_visibility="collapsed")
     st.markdown('</div>', unsafe_allow_html=True)
 
 # 5. LOGIKA GPS
@@ -179,115 +98,97 @@ if mode_lokasi == "Mode Simulasi":
 else:
     loc = streamlit_js_eval(js_expressions='new Promise((resolve) => { navigator.geolocation.getCurrentPosition((p) => resolve([p.coords.latitude, p.coords.longitude]), (e) => resolve(e.code), {enableHighAccuracy:true, timeout:5000}); })', key='gps_vfinal')
 
-# 6. ANALISIS POSISI
-user_lat, user_lon = (loc[0], loc[1]) if isinstance(loc, list) else (-6.98, 109.13)
-display_lat, display_lon, is_snapped, closest_feature = user_lat, user_lon, False, None
+# 6. ANALISIS POSISI (VERSI AKURAT)
+u_lat, u_lon = (loc[0], loc[1]) if isinstance(loc, list) else (-6.98, 109.13)
+display_lat, display_lon, is_snapped, closest_feature = u_lat, u_lon, False, None
 
 if isinstance(loc, list) and data_jalan:
-    user_point = Point(user_lon, user_lat)
-    min_dist_val = float('inf')
+    user_point = Point(u_lon, u_lat)
+    min_dist = float('inf')
     target_f = None
     for f in data_jalan['features']:
         dist = shape(f['geometry']).distance(user_point) * 111.32
-        if dist < min_dist_val:
-            min_dist_val, target_f = dist, f
-    if min_dist_val < 0.2:
+        if dist < min_dist:
+            min_dist, target_f = dist, f
+    if min_dist < 0.3:
         p1, _ = nearest_points(shape(target_f['geometry']), user_point)
         display_lat, display_lon, is_snapped, closest_feature = p1.y, p1.x, True, target_f
 
-# 7. DASHBOARD INFO (PREMIUM METRICS)
+# 7. DASHBOARD & KONFIRMASI MANUAL
 id_geo = closest_feature['properties'].get('KML_FOLDER', '-') if closest_feature else "-"
-atr = DATA_ATRIBUT.get(id_geo, {"nama": "DI LUAR JANGKAUAN", "no": "-", "km": "-"})
+data_oto = DATA_ATRIBUT.get(id_geo, {"nama": "DI LUAR JANGKAUAN", "no": "-", "km": "-"})
 
-c1, c2 = st.columns(2)
-with c1:
-    st.metric("NAMA RUAS", atr['nama'] if is_snapped else "CARI JALAN...")
-with c2:
-    st.metric("INFORMASI RUAS", f"ID: {atr['no']} • {atr['km']}")
+st.markdown("<p style='color: #fbbf24; font-weight: bold; margin-bottom: 5px;'>📍 KONFIRMASI LOKASI RUAS:</p>", unsafe_allow_html=True)
+daftar_nama = [v['nama'] for v in DATA_ATRIBUT.values()]
+try: idx_def = daftar_nama.index(data_oto['nama'])
+except: idx_def = 0
+
+ruas_final = st.selectbox("Pilih Ruas", options=daftar_nama, index=idx_def, label_visibility="collapsed")
+id_final = next((k for k, v in DATA_ATRIBUT.items() if v["nama"] == ruas_final), id_geo)
+atr = DATA_ATRIBUT.get(id_final)
+
+col1, col2 = st.columns(2)
+with col1: st.metric("NAMA RUAS", atr['nama'])
+with col2: st.metric("INFORMASI RUAS", f"ID: {atr['no']} • {atr['km']}")
 
 # 8. PETA
 st.markdown('<div class="map-wrapper">', unsafe_allow_html=True)
 tiles = "OpenStreetMap"
-if mode_peta == "Satelit":
-    tiles = "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
-elif mode_peta == "Gelap":
-    tiles = "CartoDB dark_matter"
+if mode_peta == "Satelit": tiles = "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+elif mode_peta == "Gelap": tiles = "CartoDB dark_matter"
 
-m = folium.Map(location=[display_lat, display_lon], zoom_start=17 if is_snapped else 12, tiles=tiles, attr="Google" if "Satelit" in mode_peta else None)
+m = folium.Map(location=[display_lat, display_lon], zoom_start=17 if is_snapped else 12, tiles=tiles, attr="Google")
 if data_jalan:
     folium.GeoJson(data_jalan, style_function=lambda x: {'color': '#fbbf24', 'weight': 7, 'opacity': 0.8}).add_to(m)
 folium.Marker([display_lat, display_lon], icon=folium.Icon(color='orange' if is_snapped else 'red', icon='circle-dot', prefix='fa')).add_to(m)
-
-st_folium(m, width="100%", height=450, key=f"map_final_{id_geo}_{display_lat}")
+st_folium(m, width="100%", height=400, key=f"map_{display_lat}")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 9. FORM LAPORAN & RIWAYAT
+# 9. FORM LAPORAN (SINGLE FOTO & GSHEETS)
 st.write("")
-if is_snapped:
-    with st.expander("📝 BUAT LAPORAN KONDISI", expanded=False):
-        with st.form("lapor_final", clear_on_submit=True):
-            tipe = st.selectbox("Jenis Masalah", ["Lubang Jalan", "Jalan Retak", "Jalan Amblas", "Masalah Drainase", "Bencana Alam"])
-            ket = st.text_input("Keterangan Tambahan", placeholder="Contoh: Kedalaman lubang ±10cm", max_chars=100)
+with st.expander("📝 BUAT LAPORAN KONDISI", expanded=True):
+    with st.form("lapor_final", clear_on_submit=True):
+        tipe = st.selectbox("Jenis Masalah", ["Lubang Jalan", "Jalan Amblas", "Drainase/Gorong-gorong", "Bencana Alam", "Lainnya"])
+        ket = st.text_input("Keterangan Tambahan", placeholder="Contoh: Lubang dalam ±10cm")
+        foto = st.camera_input("Ambil Foto Kerusakan") # 1 FOTO SAJA
+        
+        c_t1, c_t2 = st.columns(2)
+        with c_t1: submit = st.form_submit_button("KIRIM DATA", use_container_width=True)
+        with c_t2: reset = st.form_submit_button("HAPUS ISIAN", use_container_width=True)
+
+        if submit:
+            waktu = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+            link_map = f"https://www.google.com/maps?q={display_lat},{display_lon}"
             
-            # Camera input (ini akan otomatis terhapus jika clear_on_submit=True)
-            foto = st.camera_input("Ambil Foto")
+            # --- SIMPAN KE GOOGLE SHEETS ---
+            try:
+                existing_df = conn.read(worksheet="Sheet1")
+                new_data = pd.DataFrame([{"Waktu": waktu, "Ruas": atr['nama'], "No_Ruas": atr['no'], "KM": atr['km'], "Masalah": tipe, "Keterangan": ket, "Status": "⏳ Menunggu", "Link_Maps": link_map}])
+                updated_df = pd.concat([existing_df, new_data], ignore_index=True)
+                conn.update(worksheet="Sheet1", data=updated_df)
+            except Exception as e: st.warning(f"GSheets Error: {e}")
+
+            # --- KIRIM KE TELEGRAM ---
+            pesan_bot = (
+                f"🚨 *LAPORAN KONDISI JALAN*\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"📍 *Ruas:* {atr['nama']}\n"
+                f"🆔 *No. Ruas:* {atr['no']}\n"
+                f"⚠️ *Kondisi:* {tipe}\n"
+                f"📝 *Ket:* {ket if ket else '-'}\n"
+                f"🕒 *Status:* ⏳ Menunggu\n"
+                f"⏰ *Waktu:* {waktu}\n"
+                f"🌐 [Lihat di Google Maps]({link_map})\n"
+                f"━━━━━━━━━━━━━━━━━━━━"
+            )
+            with st.spinner("Mengirim laporan..."):
+                kirim_laporan_lengkap(pesan_bot, foto)
             
-            # Membuat kolom untuk menaruh tombol berdampingan
-            col_tombol1, col_tombol2 = st.columns(2)
-            
-            with col_tombol1:
-                submit = st.form_submit_button("KIRIM DATA", use_container_width=True)
-            
-            with col_tombol2:
-                # Tombol Reset bawaan form untuk mengosongkan isian
-                reset = st.form_submit_button("HAPUS ISIAN", use_container_width=True)
+            st.session_state.daftar_laporan.append({"Waktu": waktu, "Ruas": atr['nama'], "Masalah": tipe, "Status": "⏳ Menunggu"})
+            st.toast("Laporan Berhasil Terkirim!", icon="🚀")
+            st.rerun()
 
-            if submit:
-                waktu_sekarang = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-                lat = atr.get('lat') or atr.get('LATITUDE') or atr.get('latitude') or 0
-                lon = atr.get('lon') or atr.get('LONGITUDE') or atr.get('longitude') or 0
-
-                # Buat link hanya jika koordinat ditemukan
-                if lat != 0 and lon != 0:
-                    link_map = f"https://www.google.com/maps?q={lat},{lon}"
-                    lokasi_text = f"🌐 [Buka di Google Maps]({link_map})"
-                else:
-                    lokasi_text = "🌐 _Lokasi tidak terdeteksi_"
-                
-                # 1. Simpan ke database lokal aplikasi
-                st.session_state.daftar_laporan.append({
-                    "Waktu": waktu_sekarang, 
-                    "Ruas": atr['nama'], 
-                    "Masalah": tipe,
-                    "Keterangan": ket
-                })
-
-                # 2. Susun Pesan untuk Telegram
-                pesan_bot = (
-                    f"🚨 *LAPORAN KONDISI JALAN*\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📍 *Ruas:* {atr.get('nama', 'Tidak Diketahui')}\n"
-                    f"🆔 *No. Ruas:* {atr['no']}\n"
-                    f"⚠️ *Kondisi:* {tipe}\n"
-                    f"📝 *Keterangan:* {ket if ket else '-'}\n"
-                    f"⏰ *Waktu:* {waktu_sekarang}\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n"
-                    f"👉 _Laporan dari SIGAP TEGES Mobile_"
-                )
-
-                # 3. Eksekusi Kirim (Pesan + Foto)
-                with st.spinner("Sedang mengirim ke Telegram..."):
-                    kirim_laporan_lengkap(pesan_bot, foto)
-                
-                st.toast("Laporan & Foto Berhasil Terkirim!", icon="🚀")
-                st.rerun()
-            if reset:
-                # Karena clear_on_submit=True, menekan tombol submit apa pun di form 
-                # akan mengosongkan isian. Jadi tombol "HAPUS ISIAN" cukup 
-                # memicu rerun tanpa melakukan append data.
-                st.toast("Isian telah dibersihkan")
-                st.rerun()
-
+# 10. LOG AKTIVITAS
 if st.session_state.daftar_laporan:
     st.write("### 📋 Log Aktivitas")
-    st.dataframe(pd.DataFrame(st.session_state.daftar_laporan), use_container_width=True)
+    st.dataframe(pd.DataFrame(st.session_state.daftar_laporan), use_container_width=True, hide_index=True)
