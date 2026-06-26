@@ -232,6 +232,16 @@ with st.expander("📝 BUAT LAPORAN KONDISI", expanded=True):
                 else:
                     status.update(label="❌ Gagal Terkirim", state="error")
                     st.error("Periksa koneksi internet.")
+
+                # Opsi status penanganan untuk pengirim
+        st.write("Status Laporan:")
+        status_penanganan = st.segmented_control(
+            "Status", 
+            options=["📥 Baru Dilaporkan", "⚙️ Sedang Diproses", "✅ Selesai"], 
+            selection_mode="single",
+            default="📥 Baru Dilaporkan",
+            label_visibility="collapsed"
+        )    
 # ==========================================
 # 8. LOG AKTIVITAS
 # ==========================================
