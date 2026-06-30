@@ -357,6 +357,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
+# --------------------------
 # HALAMAN RIWAYAT & STATUS
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
@@ -368,7 +369,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     # Filter laporan
     col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Diproses", "✅ Selesai Ditangani", "❌ Ditunda / Tidak Dapat Ditangani"])
+    with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Diproses", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Tidak Dapat Ditangani"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nama jalan / jenis masalah...")
 
@@ -384,7 +385,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
             if not df_laporan.empty:
-                # Tampilkan tabel laporan
+                # Tampilkan tabel laporan saja
                 st.dataframe(
                     df_laporan,
                     use_container_width=True,
@@ -392,26 +393,12 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     column_config={
                         "Link_Maps": st.column_config.LinkColumn("Lihat Lokasi", display_text="Buka Peta"),
                         "Waktu": st.column_config.TextColumn("Waktu Lapor", width="small"),
-                        "Status": st.column_config.TextColumn("Status", width="medium")
+                        "Status": st.column_config.TextColumn("Status Penanganan", width="medium"),
+                        "Terakhir_Diperbarui": st.column_config.TextColumn("Diperbarui Pada", width="medium")
                     }
                 )
 
-                # Bagian perbarui status (untuk petugas)
-                st.markdown("<div class='card'>", unsafe_allow_html=True)
-                st.subheader("🔄 Perbarui Status Laporan")
-                daftar_waktu = df_laporan["Waktu"].tolist()
-                waktu_pilih = st.selectbox("Pilih Laporan Berdasarkan Waktu", daftar_waktu)
-                status_baru = st.selectbox("Ubah Menjadi Status", ["📥 Baru Dilaporkan", "⚙️ Sedang Diproses", "✅ Selesai Ditangani", "❌ Ditunda / Tidak Dapat Ditangani"])
-                
-                if st.button("💾 Simpan Perubahan Status", use_container_width=True, type="primary"):
-                    if perbarui_status_laporan(waktu_pilih, status_baru):
-                        st.success("✅ Status laporan berhasil diperbarui!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Gagal memperbarui status.")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-                # Tombol unduh data
+                # Tombol unduh data tetap bisa ada, atau bisa disembunyikan juga
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
                     label="📥 Unduh Data Laporan (CSV)",
