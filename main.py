@@ -13,7 +13,7 @@ from PIL import Image
 import io
 
 # --------------------------
-# KONFIGURASI AWAL
+# KONFIGURASI AWAL + PWA
 # --------------------------
 st.set_page_config(
     layout="wide",
@@ -21,6 +21,20 @@ st.set_page_config(
     page_icon="🛣️",
     initial_sidebar_state="collapsed"
 )
+
+# 🚀 BAGIAN PWA: Tambahkan Manifest dan Meta Tag
+st.markdown("""
+<head>
+    <!-- Meta untuk PWA -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#023e8a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="SIGAP TEGES">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
+    <link rel="manifest" href="/manifest.json">
+</head>
+""", unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 if "halaman_aktif" not in st.session_state:
@@ -88,7 +102,6 @@ def perbarui_status_laporan(waktu_laporan, status_baru):
     """Fungsi untuk mengubah status laporan yang sudah ada"""
     try:
         df = conn.read(ttl=0)
-        # Cari baris yang sesuai dengan waktu laporan
         kondisi = df["Waktu"] == waktu_laporan
         if kondisi.any():
             df.loc[kondisi, "Status"] = status_baru
@@ -357,7 +370,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# --------------------------
 # HALAMAN RIWAYAT & STATUS
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
@@ -382,7 +394,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             if filter_ruas != "Semua":
                 df_laporan = df_laporan[df_laporan["Ruas"] == filter_ruas]
             if cari:
-                df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
+                df_laporan = df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)
 
             if not df_laporan.empty:
                 # Tampilkan tabel laporan saja
@@ -398,7 +410,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     }
                 )
 
-                # Tombol unduh data tetap bisa ada, atau bisa disembunyikan juga
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
                     label="📥 Unduh Data Laporan (CSV)",
