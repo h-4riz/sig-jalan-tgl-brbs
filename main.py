@@ -428,10 +428,3 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
         else:
             st.info("ℹ️ Belum ada riwayat laporan.")
-
-        # Jalankan bot di latar belakang
-import threading
-from bot_update_status import jalankan_bot
-
-thread_bot = threading.Thread(target=jalankan_bot, daemon=True)
-thread_bot.start()    
