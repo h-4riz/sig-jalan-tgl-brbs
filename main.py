@@ -9,6 +9,8 @@ from shapely.ops import nearest_points
 from streamlit_js_eval import streamlit_js_eval
 import requests
 from streamlit_gsheets import GSheetsConnection
+from PIL import Image
+import io
 
 # --------------------------
 # KONFIGURASI AWAL
@@ -20,7 +22,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Inisialisasi koneksi & state
 conn = st.connection("gsheets", type=GSheetsConnection)
 if "halaman_aktif" not in st.session_state:
     st.session_state["halaman_aktif"] = "beranda"
@@ -30,16 +31,35 @@ if "daftar_laporan" not in st.session_state:
 # --------------------------
 # FUNGSI UTAMA
 # --------------------------
+def kompresi_foto(file_foto, ukuran_maks=1000):
+    """Kompresi foto agar ukuran tidak terlalu besar"""
+    try:
+        img = Image.open(file_foto)
+        lebar, tinggi = img.size
+        if lebar > ukuran_maks or tinggi > ukuran_maks:
+            rasio = min(ukuran_maks / lebar, ukuran_maks / tinggi)
+            lebar_baru = int(lebar * rasio)
+            tinggi_baru = int(tinggi * rasio)
+            img = img.resize((lebar_baru, tinggi_baru), Image.Resampling.LANCZOS)
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=75, optimize=True)
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        st.warning(f"Tidak dapat mengompresi foto: {e}")
+        return file_foto
+
 def kirim_laporan_lengkap(pesan, file_foto=None):
     try:
         token = st.secrets["TELEGRAM_TOKEN"]
         chat_id = str(st.secrets["TELEGRAM_CHAT_ID"]).strip()
         if file_foto:
+            foto_terkompres = kompresi_foto(file_foto)
             url = f"https://api.telegram.org/bot{token}/sendPhoto"
             res = requests.post(
                 url,
                 data={"chat_id": chat_id, "caption": pesan, "parse_mode": "Markdown"},
-                files={'photo': file_foto.getvalue()},
+                files={'photo': foto_terkompres},
                 timeout=30
             )
         else:
@@ -62,6 +82,22 @@ def simpan_ke_gsheets(data_baru):
         return True
     except Exception as e:
         st.error(f"Kesalahan Simpan Data: {str(e)}")
+        return False
+
+def perbarui_status_laporan(waktu_laporan, status_baru):
+    """Fungsi untuk mengubah status laporan yang sudah ada"""
+    try:
+        df = conn.read(ttl=0)
+        # Cari baris yang sesuai dengan waktu laporan
+        kondisi = df["Waktu"] == waktu_laporan
+        if kondisi.any():
+            df.loc[kondisi, "Status"] = status_baru
+            df.loc[kondisi, "Terakhir_Diperbarui"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            conn.update(data=df)
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Gagal memperbarui status: {e}")
         return False
 
 @st.cache_data(show_spinner="Memuat data peta...")
@@ -190,7 +226,6 @@ if st.session_state["halaman_aktif"] == "beranda":
 # HALAMAN LAPORAN
 # --------------------------
 elif st.session_state["halaman_aktif"] == "lapor":
-    # Tombol Kembali
     if st.button("⬅️ Kembali ke Beranda"):
         st.session_state["halaman_aktif"] = "beranda"
         st.rerun()
@@ -199,12 +234,10 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
     data_jalan = load_data_jalan()
 
-    # Mode Tampilan & Lokasi
     col1, col2 = st.columns(2)
     with col1: mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
     with col2: mode_lokasi = st.selectbox("Sumber Lokasi", ["Mode Simulasi", "GPS Langsung"])
 
-    # Ambil Lokasi
     if mode_lokasi == "Mode Simulasi":
         loc = [-6.9833, 109.1333]
     else:
@@ -216,7 +249,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
     u_lat, u_lon = (loc[0], loc[1]) if isinstance(loc, list) else (-6.98, 109.13)
     display_lat, display_lon, is_snapped, closest_feature = u_lat, u_lon, False, None
 
-    # Logika Penyesuaian ke Ruas Jalan
     if isinstance(loc, list) and data_jalan:
         user_point = Point(u_lon, u_lat)
         min_dist = float('inf')
@@ -229,7 +261,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
             p1, _ = nearest_points(shape(target_f['geometry']), user_point)
             display_lat, display_lon, is_snapped, closest_feature = p1.y, p1.x, True, target_f
 
-    # Informasi Ruas
     id_geo = closest_feature['properties'].get('KML_FOLDER', '-') if closest_feature else "-"
     data_oto = DATA_ATRIBUT.get(id_geo, {"nama": "DI LUAR JANGKAUAN", "no": "-", "km": "-"})
 
@@ -243,7 +274,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
     with col_m1: st.metric("Nama Ruas", atr['nama'])
     with col_m2: st.metric("Nomor & KM", f"ID {atr['no']} | {atr['km']}")
 
-    # Tampilan Peta
     st.markdown("<div class='map-wrapper'>", unsafe_allow_html=True)
     tiles = "OpenStreetMap"
     if mode_peta == "Satelit":
@@ -266,7 +296,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
     st_folium(m, width="100%", height=420, key="peta_utama")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Form Laporan
     with st.container():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("📝 Isi Laporan Kerusakan")
@@ -288,6 +317,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
                     waktu = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                     link_maps = f"https://www.google.com/maps?q={u_lat:.6f},{u_lon:.6f}"
 
+                    # Data laporan dengan status awal
                     data_laporan = {
                         "Waktu": waktu,
                         "Ruas": atr['nama'],
@@ -296,6 +326,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
                         "Jenis_Masalah": tipe_masalah,
                         "Keterangan": keterangan or "-",
                         "Status": "📥 Baru Dilaporkan",
+                        "Terakhir_Diperbarui": waktu,
                         "Koordinat": f"{u_lat:.6f}, {u_lon:.6f}",
                         "Link_Maps": link_maps
                     }
@@ -309,6 +340,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
 📝 *Keterangan:* {keterangan or "-"}
 ⏰ *Waktu:* {waktu}
 🌍 *Lokasi:* {link_maps}
+📊 *Status:* 📥 Baru Dilaporkan
 ━━━━━━━━━━━━━━━━━━━━━
                     """
 
@@ -318,14 +350,14 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
                         if ok1 and ok2:
                             st.session_state["daftar_laporan"].append(data_laporan)
-                            st.success("✅ Laporan berhasil dikirim dan tersimpan!")
+                            st.success("✅ Laporan berhasil dikirim dan tersimpan! Status: Baru Dilaporkan")
                             st.balloons()
                         else:
                             st.error("❌ Gagal mengirim. Periksa koneksi internet atau pengaturan.")
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# HALAMAN RIWAYAT
+# HALAMAN RIWAYAT & STATUS
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -334,23 +366,67 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # Muat data terbaru dari Google Sheets
+    # Filter laporan
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Diproses", "✅ Selesai Ditangani", "❌ Ditunda / Tidak Dapat Ditangani"])
+    with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
+    with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nama jalan / jenis masalah...")
+
     try:
         df_laporan = conn.read(ttl=0)
         if not df_laporan.empty:
-            st.dataframe(
-                df_laporan,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Link_Maps": st.column_config.LinkColumn("Buka Peta", display_text="Lihat Lokasi")
-                }
-            )
+            # Terapkan filter
+            if filter_status != "Semua":
+                df_laporan = df_laporan[df_laporan["Status"] == filter_status]
+            if filter_ruas != "Semua":
+                df_laporan = df_laporan[df_laporan["Ruas"] == filter_ruas]
+            if cari:
+                df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
+
+            if not df_laporan.empty:
+                # Tampilkan tabel laporan
+                st.dataframe(
+                    df_laporan,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Link_Maps": st.column_config.LinkColumn("Lihat Lokasi", display_text="Buka Peta"),
+                        "Waktu": st.column_config.TextColumn("Waktu Lapor", width="small"),
+                        "Status": st.column_config.TextColumn("Status", width="medium")
+                    }
+                )
+
+                # Bagian perbarui status (untuk petugas)
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.subheader("🔄 Perbarui Status Laporan")
+                daftar_waktu = df_laporan["Waktu"].tolist()
+                waktu_pilih = st.selectbox("Pilih Laporan Berdasarkan Waktu", daftar_waktu)
+                status_baru = st.selectbox("Ubah Menjadi Status", ["📥 Baru Dilaporkan", "⚙️ Sedang Diproses", "✅ Selesai Ditangani", "❌ Ditunda / Tidak Dapat Ditangani"])
+                
+                if st.button("💾 Simpan Perubahan Status", use_container_width=True, type="primary"):
+                    if perbarui_status_laporan(waktu_pilih, status_baru):
+                        st.success("✅ Status laporan berhasil diperbarui!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Gagal memperbarui status.")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                # Tombol unduh data
+                csv = df_laporan.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="📥 Unduh Data Laporan (CSV)",
+                    data=csv,
+                    file_name=f"laporan_jalan_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.info("ℹ️ Tidak ada laporan yang sesuai dengan filter.")
         else:
-            st.info("Belum ada laporan yang dikirim.")
+            st.info("ℹ️ Belum ada laporan yang dikirim.")
     except Exception as e:
-        st.warning("Gagal memuat data dari Google Sheets. Menampilkan data sesi sementara saja.")
+        st.warning("⚠️ Gagal memuat data dari Google Sheets.")
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
         else:
-            st.info("Belum ada riwayat laporan.")
+            st.info("ℹ️ Belum ada riwayat laporan.")
