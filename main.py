@@ -8,9 +8,10 @@ from shapely.geometry import shape, Point
 from shapely.ops import nearest_points
 from streamlit_js_eval import streamlit_js_eval
 import requests
-from streamlit_gsheets import GSheetsConnection
 from PIL import Image
 import io
+import gspread
+from google.oauth2.service_account import Credentials
 
 # --------------------------
 # KONFIGURASI AWAL + PWA
@@ -22,10 +23,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🚀 BAGIAN PWA: Tambahkan Manifest dan Meta Tag
+# Meta tag untuk PWA
 st.markdown("""
 <head>
-    <!-- Meta untuk PWA -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#023e8a">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -36,7 +36,28 @@ st.markdown("""
 </head>
 """, unsafe_allow_html=True)
 
-conn = st.connection("gsheets", type=GSheetsConnection)
+# --------------------------
+# KONEKSI GOOGLE SHEETS (GSPREAD)
+# --------------------------
+@st.cache_resource(show_spinner="Menghubungkan ke Google Sheets...")
+def init_gsheets():
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    try:
+        service_account_info = st.secrets["connections"]["gsheets"]
+        creds = Credentials.from_service_account_info(service_account_info, scopes=scopes)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_url(st.secrets["gsheets_url"]).sheet1
+        return sheet
+    except Exception as e:
+        st.error(f"Koneksi ke Google Sheets gagal: {e}")
+        return None
+
+sheet = init_gsheets()
+
+# Inisialisasi sesi
 if "halaman_aktif" not in st.session_state:
     st.session_state["halaman_aktif"] = "beranda"
 if "daftar_laporan" not in st.session_state:
@@ -89,24 +110,37 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
         return False
 
 def simpan_ke_gsheets(data_baru):
+    if not sheet:
+        st.warning("Tidak terhubung ke Google Sheets, data disimpan sementara di aplikasi.")
+        st.session_state["daftar_laporan"].append(data_baru)
+        return False
     try:
-        df_lama = conn.read(ttl=0)
-        df_total = pd.concat([df_lama, pd.DataFrame([data_baru])], ignore_index=True)
-        conn.update(data=df_total)
+        row = [
+            data_baru["Waktu"], data_baru["Ruas"], data_baru["No_Ruas"], data_baru["KM"],
+            data_baru["Jenis_Masalah"], data_baru["Keterangan"], data_baru["Status"],
+            data_baru["Terakhir_Diperbarui"], data_baru["Koordinat"], data_baru["Link_Maps"]
+        ]
+        sheet.append_row(row)
         return True
     except Exception as e:
         st.error(f"Kesalahan Simpan Data: {str(e)}")
+        st.session_state["daftar_laporan"].append(data_baru)
         return False
 
 def perbarui_status_laporan(waktu_laporan, status_baru):
-    """Fungsi untuk mengubah status laporan yang sudah ada"""
+    if not sheet:
+        st.error("Tidak terhubung ke Google Sheets.")
+        return False
     try:
-        df = conn.read(ttl=0)
-        kondisi = df["Waktu"] == waktu_laporan
-        if kondisi.any():
-            df.loc[kondisi, "Status"] = status_baru
-            df.loc[kondisi, "Terakhir_Diperbarui"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            conn.update(data=df)
+        data = sheet.get_all_records()
+        df = pd.DataFrame(data)
+        if df.empty:
+            return False
+        idx = df.index[df["Waktu"].astype(str).str.strip() == waktu_laporan.strip()].tolist()
+        if idx:
+            row_num = idx[0] + 2  # Baris 1 = header
+            sheet.update_cell(row_num, 7, status_baru)
+            sheet.update_cell(row_num, 8, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
             return True
         return False
     except Exception as e:
@@ -330,7 +364,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
                     waktu = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                     link_maps = f"https://www.google.com/maps?q={u_lat:.6f},{u_lon:.6f}"
 
-                    # Data laporan dengan status awal
                     data_laporan = {
                         "Waktu": waktu,
                         "Ruas": atr['nama'],
@@ -362,11 +395,10 @@ elif st.session_state["halaman_aktif"] == "lapor":
                         ok2 = simpan_ke_gsheets(data_laporan)
 
                         if ok1 and ok2:
-                            st.session_state["daftar_laporan"].append(data_laporan)
                             st.success("✅ Laporan berhasil dikirim dan tersimpan! Status: Baru Dilaporkan")
                             st.balloons()
                         else:
-                            st.error("❌ Gagal mengirim. Periksa koneksi internet atau pengaturan.")
+                            st.warning("⚠️ Laporan terkirim, tapi tersimpan sementara. Akan disinkronkan nanti.")
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
@@ -379,25 +411,27 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # Filter laporan
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Diproses", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Tidak Dapat Ditangani"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nama jalan / jenis masalah...")
 
     try:
-        df_laporan = conn.read(ttl=0)
+        if sheet:
+            data = sheet.get_all_records()
+            df_laporan = pd.DataFrame(data)
+        else:
+            df_laporan = pd.DataFrame(st.session_state["daftar_laporan"])
+
         if not df_laporan.empty:
-            # Terapkan filter
             if filter_status != "Semua":
                 df_laporan = df_laporan[df_laporan["Status"] == filter_status]
             if filter_ruas != "Semua":
                 df_laporan = df_laporan[df_laporan["Ruas"] == filter_ruas]
             if cari:
-                df_laporan = df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)
+                df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
             if not df_laporan.empty:
-                # Tampilkan tabel laporan saja
                 st.dataframe(
                     df_laporan,
                     use_container_width=True,
@@ -423,8 +457,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         else:
             st.info("ℹ️ Belum ada laporan yang dikirim.")
     except Exception as e:
-        st.warning("⚠️ Gagal memuat data dari Google Sheets.")
+        st.error(f"⚠️ Gagal memuat data: {e}")
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
-        else:
-            st.info("ℹ️ Belum ada riwayat laporan.")
