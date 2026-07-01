@@ -12,6 +12,11 @@ from PIL import Image
 import io
 import gspread
 from google.oauth2.service_account import Credentials
+import threading
+from bot_update_status import jalankan_bot
+
+thread_bot = threading.Thread(target=jalankan_bot, daemon=True)
+thread_bot.start()
 
 # --------------------------
 # KONFIGURASI AWAL + PWA
