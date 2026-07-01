@@ -1,8 +1,10 @@
 streamlit
+pandas
 folium
 streamlit-folium
-pandas
 shapely
-streamlit-js_eval
+streamlit-js-eval
+pillow
 requests
-st-gsheets-connection
+gspread
+google-auth
