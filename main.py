@@ -13,10 +13,6 @@ import io
 import gspread
 from google.oauth2.service_account import Credentials
 import threading
-from bot_update_status import jalankan_bot
-
-thread_bot = threading.Thread(target=jalankan_bot, daemon=True)
-thread_bot.start()
 
 # --------------------------
 # KONFIGURASI AWAL + PWA
@@ -42,7 +38,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --------------------------
-# KONEKSI GOOGLE SHEETS (GSPREAD)
+# KONEKSI GOOGLE SHEETS
 # --------------------------
 @st.cache_resource(show_spinner="Menghubungkan ke Google Sheets...")
 def init_gsheets():
@@ -51,13 +47,16 @@ def init_gsheets():
         "https://www.googleapis.com/auth/drive"
     ]
     try:
-        service_account_info = st.secrets["connections"]["gsheets"]
+        service_account_info = json.loads(st.secrets["gsheets_json"])
         creds = Credentials.from_service_account_info(service_account_info, scopes=scopes)
         client = gspread.authorize(creds)
         sheet = client.open_by_url(st.secrets["gsheets_url"]).sheet1
         return sheet
+    except KeyError as e:
+        st.error(f"❌ Kunci rahasia tidak ditemukan: `{e}`. Periksa secrets.toml!")
+        return None
     except Exception as e:
-        st.error(f"Koneksi ke Google Sheets gagal: {e}")
+        st.error(f"❌ Gagal terhubung ke Google Sheets: {str(e)}")
         return None
 
 sheet = init_gsheets()
@@ -69,10 +68,9 @@ if "daftar_laporan" not in st.session_state:
     st.session_state["daftar_laporan"] = []
 
 # --------------------------
-# FUNGSI UTAMA
+# FUNGSI UTAMA APLIKASI
 # --------------------------
 def kompresi_foto(file_foto, ukuran_maks=1000):
-    """Kompresi foto agar ukuran tidak terlalu besar"""
     try:
         img = Image.open(file_foto)
         lebar, tinggi = img.size
@@ -116,7 +114,7 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
 
 def simpan_ke_gsheets(data_baru):
     if not sheet:
-        st.warning("Tidak terhubung ke Google Sheets, data disimpan sementara di aplikasi.")
+        st.warning("⚠️ Tidak terhubung ke Google Sheets, data disimpan sementara di aplikasi.")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
     try:
@@ -128,13 +126,13 @@ def simpan_ke_gsheets(data_baru):
         sheet.append_row(row)
         return True
     except Exception as e:
-        st.error(f"Kesalahan Simpan Data: {str(e)}")
+        st.error(f"Gagal menyimpan ke Google Sheets: {str(e)}")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
 
 def perbarui_status_laporan(waktu_laporan, status_baru):
     if not sheet:
-        st.error("Tidak terhubung ke Google Sheets.")
+        st.error("❌ Tidak terhubung ke Google Sheets.")
         return False
     try:
         data = sheet.get_all_records()
@@ -143,7 +141,7 @@ def perbarui_status_laporan(waktu_laporan, status_baru):
             return False
         idx = df.index[df["Waktu"].astype(str).str.strip() == waktu_laporan.strip()].tolist()
         if idx:
-            row_num = idx[0] + 2  # Baris 1 = header
+            row_num = idx[0] + 2
             sheet.update_cell(row_num, 7, status_baru)
             sheet.update_cell(row_num, 8, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
             return True
@@ -158,7 +156,7 @@ def load_data_jalan():
         with open('jalan_tegal_brebes.geojson', 'r', encoding='utf-8') as f:
             return json.load(f)
     except:
-        st.warning("File data jalan tidak ditemukan, peta akan ditampilkan tanpa batas ruas.")
+        st.warning("⚠️ File data jalan tidak ditemukan, peta akan ditampilkan tanpa batas ruas.")
         return None
 
 # --------------------------
@@ -193,7 +191,6 @@ st.markdown("""
     html, body, .stMarkdown, .stText { color: #ffffff !important; }
     .block-container { padding: 2rem 5% !important; max-width: 1200px; margin: auto; }
     
-    /* Kartu & Navigasi */
     .card {
         background: rgba(255, 255, 255, 0.12);
         backdrop-filter: blur(18px);
@@ -235,7 +232,6 @@ st.markdown("""
         margin-bottom: 3rem;
     }
     
-    /* Peta & Data */
     .map-wrapper {
         border-radius: 24px;
         overflow: hidden;
@@ -252,7 +248,6 @@ st.markdown("""
     div[data-testid="stMetricLabel"] p { font-size: 1rem !important; font-weight: 600 !important; }
     div[data-testid="stMetricValue"] { font-size: 1.2rem !important; font-weight: 700 !important; }
     
-    /* Sembunyikan elemen bawaan */
     header, #MainMenu, footer, [data-testid="stSidebar"] { visibility: hidden; }
     </style>
 """, unsafe_allow_html=True)
@@ -400,10 +395,10 @@ elif st.session_state["halaman_aktif"] == "lapor":
                         ok2 = simpan_ke_gsheets(data_laporan)
 
                         if ok1 and ok2:
-                            st.success("✅ Laporan berhasil dikirim dan tersimpan! Status: Baru Dilaporkan")
+                            st.success("✅ Laporan berhasil dikirim dan tersimpan!")
                             st.balloons()
                         else:
-                            st.warning("⚠️ Laporan terkirim, tapi tersimpan sementara. Akan disinkronkan nanti.")
+                            st.warning("⚠️ Laporan terkirim, tersimpan sementara. Akan disinkronkan nanti.")
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
@@ -465,3 +460,102 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         st.error(f"⚠️ Gagal memuat data: {e}")
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
+
+# --------------------------
+# 🤖 BOT UPDATE STATUS TELEGRAM (TERGABUNG)
+# --------------------------
+TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
+GSHEETS_URL = st.secrets["gsheets_url"]
+GSHEETS_JSON = st.secrets["gsheets_json"]
+IZIN_CHAT_ID = ["-1001234567890"]  # ✅ GANTI DENGAN ID GRUP TELEGRAM ANDA
+DAFTAR_STATUS = [
+    "📥 Baru Dilaporkan",
+    "⚙️ Sedang Diproses",
+    "✅ Sesuai Kondisi Penanganan",
+    "❌ Ditunda / Tidak Dapat Ditangani"
+]
+URL_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+
+def koneksi_sheet_bot():
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    info = json.loads(GSHEETS_JSON)
+    creds = Credentials.from_service_account_info(info, scopes=scopes)
+    return gspread.authorize(creds).open_by_url(GSHEETS_URL).sheet1
+
+sheet_bot = koneksi_sheet_bot()
+
+def update_status_bot(waktu_laporan: str, status_baru: str) -> bool:
+    try:
+        data = sheet_bot.get_all_records()
+        for idx, row in enumerate(data, start=2):
+            if str(row.get("Waktu", "")).strip() == waktu_laporan.strip():
+                sheet_bot.update_cell(idx, 7, status_baru)
+                sheet_bot.update_cell(idx, 8, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+                return True
+        return False
+    except Exception as e:
+        print("Update error:", e)
+        return False
+
+def kirim_pesan_bot(chat_id: str, teks: str, tombol=None):
+    requests.post(
+        f"{URL_API}/sendMessage",
+        data={
+            "chat_id": chat_id,
+            "text": teks,
+            "parse_mode": "Markdown",
+            "reply_markup": json.dumps(tombol) if tombol else ""
+        }, timeout=15
+    )
+
+def proses_pesan_bot(update):
+    pesan = update.get("message", {})
+    chat_id = str(pesan.get("chat", {}).get("id", ""))
+    teks = pesan.get("text", "").strip()
+    if chat_id not in IZIN_CHAT_ID:
+        return
+    if teks == "/status":
+        kirim_pesan_bot(chat_id, "📋 *Cara Update Status Laporan:*\n\nKetik:\n`/update DD/MM/YYYY HH:MM:SS`\n\nContoh:\n`/update 01/07/2026 15:30:00`")
+    elif teks.startswith("/update "):
+        waktu = teks.replace("/update ", "").strip()
+        if not waktu:
+            kirim_pesan_bot(chat_id, "⚠️ Format salah! Contoh:\n`/update 01/07/2026 15:30:00`")
+            return
+        tombol = {"inline_keyboard": [[{"text": s, "callback_data": f"set|{waktu}|{s}"}] for s in DAFTAR_STATUS]}
+        kirim_pesan_bot(chat_id, f"🔧 Pilih status untuk laporan:\n`{waktu}`", tombol)
+
+def proses_callback_bot(update):
+    data = update.get("callback_query", {})
+    chat_id = str(data.get("message", {}).get("chat", {}).get("id", ""))
+    pesan_id = data.get("message", {}).get("message_id")
+    data_aksi = data.get("data", "")
+    if chat_id not in IZIN_CHAT_ID or not data_aksi.startswith("set|"):
+        return
+    _, waktu, status = data_aksi.split("|", 2)
+    ok = update_status_bot(waktu, status)
+    teks = f"✅ *Status Berhasil Diperbarui*\n⏰ Waktu: `{waktu}`\n📊 Status: {status}" if ok else f"❌ *Laporan Tidak Ditemukan*\nPeriksa format waktu: `{waktu}`"
+    requests.post(
+        f"{URL_API}/editMessageText",
+        data={"chat_id": chat_id, "message_id": pesan_id, "text": teks, "parse_mode": "Markdown"},
+        timeout=15
+    )
+
+def jalankan_bot():
+    offset = 0
+    while True:
+        try:
+            res = requests.get(f"{URL_API}/getUpdates", params={"offset": offset, "timeout": 30}).json()
+            if res["ok"]:
+                for upd in res["result"]:
+                    offset = upd["update_id"] + 1
+                    if "message" in upd:
+                        proses_pesan_bot(upd)
+                    elif "callback_query" in upd:
+                        proses_callback_bot(upd)
+        except Exception as e:
+            print("Bot error:", e)
+            continue
+
+# Jalankan bot di latar belakang
+thread_bot = threading.Thread(target=jalankan_bot, daemon=True)
+thread_bot.start()
