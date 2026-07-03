@@ -119,19 +119,32 @@ def simpan_ke_gsheets(data_baru):
         st.session_state["daftar_laporan"].append(data_baru)
         return False
     try:
+        # Hitung nomor urut otomatis
+        semua_data = sheet.get_all_records()
+        no_urut = len(semua_data) + 1
+
         row = [
-            data_baru["Waktu"], data_baru["Ruas"], data_baru["No_Ruas"], data_baru["KM"],
-            data_baru["Jenis_Masalah"], data_baru["Keterangan"], data_baru["Status"],
-            data_baru["Terakhir_Diperbarui"], data_baru["Koordinat"], data_baru["Link_Maps"]
+            no_urut,                # Kolom 1: No Urut
+            data_baru["Waktu"],     # Kolom 2: Waktu Lapor
+            data_baru["Ruas"],      # Kolom 3: Nama Ruas
+            data_baru["No_Ruas"],   # Kolom 4: Nomor Ruas
+            data_baru["KM"],        # Kolom 5: Titik KM
+            data_baru["Jenis_Masalah"], # Kolom 6: Jenis Masalah
+            data_baru["Keterangan"],    # Kolom 7: Keterangan
+            data_baru["Status"],        # Kolom 8: Status
+            data_baru["Terakhir_Diperbarui"], # Kolom 9: Waktu Update
+            data_baru["Koordinat"],     # Kolom 10: Koordinat
+            data_baru["Link_Maps"]      # Kolom 11: Link Peta
         ]
         sheet.append_row(row)
+        data_baru["No_Urut"] = no_urut
         return True
     except Exception as e:
         st.error(f"Gagal menyimpan ke Google Sheets: {str(e)}")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
 
-def perbarui_status_laporan(waktu_laporan, status_baru):
+def perbarui_status_laporan(no_urut, status_baru):
     if not sheet:
         st.error("❌ Tidak terhubung ke Google Sheets.")
         return False
@@ -140,11 +153,11 @@ def perbarui_status_laporan(waktu_laporan, status_baru):
         df = pd.DataFrame(data)
         if df.empty:
             return False
-        idx = df.index[df["Waktu"].astype(str).str.strip() == waktu_laporan.strip()].tolist()
+        idx = df.index[df["No Urut"].astype(str).str.strip() == str(no_urut).strip()].tolist()
         if idx:
             row_num = idx[0] + 2
-            sheet.update_cell(row_num, 7, status_baru)
-            sheet.update_cell(row_num, 8, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+            sheet.update_cell(row_num, 8, status_baru)
+            sheet.update_cell(row_num, 9, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
             return True
         return False
     except Exception as e:
@@ -378,9 +391,14 @@ elif st.session_state["halaman_aktif"] == "lapor":
                         "Link_Maps": link_maps
                     }
 
-                    pesan_telegram = f"""
+                    with st.status("Mengirim laporan...", expanded=True):
+                        ok2 = simpan_ke_gsheets(data_laporan)
+                        no_urut = data_laporan.get("No_Urut", "-")
+
+                        pesan_telegram = f"""
 🚨 *LAPORAN KERUSAKAN JALAN*
 ━━━━━━━━━━━━━━━━━━━━━
+🔢 *No Laporan:* {no_urut}
 📍 *Ruas Jalan:* {atr['nama']}
 🔢 *Nomor Ruas:* {atr['no']}
 ⚠️ *Masalah:* {tipe_masalah}
@@ -389,14 +407,11 @@ elif st.session_state["halaman_aktif"] == "lapor":
 🌍 *Lokasi:* {link_maps}
 📊 *Status:* 📥 Baru Dilaporkan
 ━━━━━━━━━━━━━━━━━━━━━
-                    """
-
-                    with st.status("Mengirim laporan...", expanded=True):
+                        """
                         ok1 = kirim_laporan_lengkap(pesan_telegram, foto)
-                        ok2 = simpan_ke_gsheets(data_laporan)
 
                         if ok1 and ok2:
-                            st.success("✅ Laporan berhasil dikirim dan tersimpan!")
+                            st.success(f"✅ Laporan berhasil dikirim! Nomor laporan Anda: **{no_urut}**")
                             st.balloons()
                         else:
                             st.warning("⚠️ Laporan terkirim, tersimpan sementara. Akan disinkronkan nanti.")
@@ -415,7 +430,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Diproses", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Tidak Dapat Ditangani"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
-    with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nama jalan / jenis masalah...")
+    with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
     try:
         if sheet:
@@ -425,6 +440,11 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             df_laporan = pd.DataFrame(st.session_state["daftar_laporan"])
 
         if not df_laporan.empty:
+            # ✅ Urutkan dari nomor terbesar (laporan terbaru) ke terkecil
+            if "No Urut" in df_laporan.columns:
+                df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
+                df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
+
             if filter_status != "Semua":
                 df_laporan = df_laporan[df_laporan["Status"] == filter_status]
             if filter_ruas != "Semua":
@@ -438,8 +458,9 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     use_container_width=True,
                     hide_index=True,
                     column_config={
+                        "No Urut": st.column_config.NumberColumn("No Laporan", width="small"),
                         "Link_Maps": st.column_config.LinkColumn("Lihat Lokasi", display_text="Buka Peta"),
-                        "Waktu": st.column_config.TextColumn("Waktu Lapor", width="small"),
+                        "Waktu": st.column_config.TextColumn("Waktu Lapor", width="medium"),
                         "Status": st.column_config.TextColumn("Status Penanganan", width="medium"),
                         "Terakhir_Diperbarui": st.column_config.TextColumn("Diperbarui Pada", width="medium")
                     }
@@ -463,7 +484,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
 
 # --------------------------
-# 🤖 BOT UPDATE STATUS TELEGRAM
+# 🤖 BOT UPDATE STATUS TELEGRAM (PAKAI NO URUT)
 # --------------------------
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 GSHEETS_URL = st.secrets["gsheets_url"]
@@ -484,13 +505,13 @@ def koneksi_sheet_bot():
 
 sheet_bot = koneksi_sheet_bot()
 
-def update_status_bot(waktu_laporan: str, status_baru: str) -> bool:
+def update_status_bot(no_urut: str, status_baru: str) -> bool:
     try:
         data = sheet_bot.get_all_records()
         for idx, row in enumerate(data, start=2):
-            if str(row.get("Waktu", "")).strip() == waktu_laporan.strip():
-                sheet_bot.update_cell(idx, 7, status_baru)
-                sheet_bot.update_cell(idx, 8, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+            if str(row.get("No Urut", "")).strip() == str(no_urut).strip():
+                sheet_bot.update_cell(idx, 8, status_baru)
+                sheet_bot.update_cell(idx, 9, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
                 return True
         return False
     except Exception as e:
@@ -514,15 +535,26 @@ def proses_pesan_bot(update):
     teks = pesan.get("text", "").strip()
     if chat_id not in IZIN_CHAT_ID:
         return
+
     if teks == "/status":
-        kirim_pesan_bot(chat_id, "📋 *Cara Update Status Laporan:*\n\nKetik:\n`/update DD/MM/YYYY HH:MM:SS`\n\nContoh:\n`/update 01/07/2026 15:30:00`")
+        kirim_pesan_bot(chat_id, """📋 *Cara Update Status Laporan:*
+
+Ketik:
+`/update <nomor_laporan>`
+
+Contoh:
+`/update 5`
+
+Akan muncul pilihan status untuk laporan tersebut.
+""")
+
     elif teks.startswith("/update "):
-        waktu = teks.replace("/update ", "").strip()
-        if not waktu:
-            kirim_pesan_bot(chat_id, "⚠️ Format salah! Contoh:\n`/update 01/07/2026 15:30:00`")
+        nomor = teks.replace("/update ", "").strip()
+        if not nomor.isdigit():
+            kirim_pesan_bot(chat_id, "⚠️ *Format salah!*\nMasukkan nomor laporan saja.\nContoh: `/update 3`")
             return
-        tombol = {"inline_keyboard": [[{"text": s, "callback_data": f"set|{waktu}|{s}"}] for s in DAFTAR_STATUS]}
-        kirim_pesan_bot(chat_id, f"🔧 Pilih status untuk laporan:\n`{waktu}`", tombol)
+        tombol = {"inline_keyboard": [[{"text": s, "callback_data": f"set|{nomor}|{s}"}] for s in DAFTAR_STATUS]}
+        kirim_pesan_bot(chat_id, f"🔧 *Pilih Status untuk Laporan No: {nomor}*", tombol)
 
 def proses_callback_bot(update):
     data = update.get("callback_query", {})
@@ -531,9 +563,9 @@ def proses_callback_bot(update):
     data_aksi = data.get("data", "")
     if chat_id not in IZIN_CHAT_ID or not data_aksi.startswith("set|"):
         return
-    _, waktu, status = data_aksi.split("|", 2)
-    ok = update_status_bot(waktu, status)
-    teks = f"✅ *Status Berhasil Diperbarui*\n⏰ Waktu: `{waktu}`\n📊 Status: {status}" if ok else f"❌ *Laporan Tidak Ditemukan*\nPeriksa format waktu: `{waktu}`"
+    _, nomor, status = data_aksi.split("|", 2)
+    ok = update_status_bot(nomor, status)
+    teks = f"✅ *Status Berhasil Diperbarui*\n📌 *No Laporan:* {nomor}\n📊 *Status:* {status}" if ok else f"❌ *Laporan Tidak Ditemukan*\nNomor `{nomor}` tidak ada di daftar."
     requests.post(
         f"{URL_API}/editMessageText",
         data={"chat_id": chat_id, "message_id": pesan_id, "text": teks, "parse_mode": "Markdown"},
@@ -542,7 +574,6 @@ def proses_callback_bot(update):
 
 def jalankan_bot():
     offset = 0
-    # Simpan ID pesan yang sudah diproses agar tidak diulang
     pesan_diproses = set()
     while True:
         try:
@@ -554,26 +585,19 @@ def jalankan_bot():
             if res.get("ok") and res.get("result"):
                 for upd in res["result"]:
                     update_id = upd["update_id"]
-                    # Langsung geser offset agar tidak dibaca lagi
                     offset = update_id + 1
-
-                    # Lewati jika sudah diproses sebelumnya
                     if update_id in pesan_diproses:
                         continue
                     pesan_diproses.add(update_id)
-                    # Batasi jumlah riwayat agar tidak memakan memori
                     if len(pesan_diproses) > 200:
                         pesan_diproses = set(list(pesan_diproses)[-100:])
-
                     if "message" in upd:
                         proses_pesan_bot(upd)
                     elif "callback_query" in upd:
                         proses_callback_bot(upd)
-
         except Exception as e:
             print("Bot error:", e)
-            time.sleep(3)  # Jeda sebentar jika ada gangguan jaringan
-            continue
-# Jalankan bot di latar belakang
+            time.sleep(3)
+
 thread_bot = threading.Thread(target=jalankan_bot, daemon=True)
 thread_bot.start()
