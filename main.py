@@ -526,11 +526,11 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
 # --------------------------
-# 🤖 BOT UPDATE STATUS TELEGRAM
+# 🤖 BOT UPDATE STATUS TELEGRAM (PERBAIKAN AKHIR - TIDAK BERULANG)
 # --------------------------
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 GSHEETS_URL = st.secrets["gsheets_url"]
-IZIN_CHAT_ID = ["-1003492896109"]
+IZIN_CHAT_ID = ["-1003492896109"]  # Ganti dengan ID grup kamu
 DAFTAR_STATUS = [
     "📥 Baru Dilaporkan",
     "⚙️ Sedang Diproses",
@@ -539,6 +539,7 @@ DAFTAR_STATUS = [
 ]
 URL_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
+# Koneksi ke Google Sheet
 def koneksi_sheet_bot():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     info = dict(st.secrets["connections"]["gsheets"])
@@ -547,12 +548,13 @@ def koneksi_sheet_bot():
 
 sheet_bot = koneksi_sheet_bot()
 
+# Update status laporan
 def update_status_bot(no_urut: str, status_baru: str) -> bool:
     try:
         data = sheet_bot.get_all_records()
         if not data:
             return False
-        for idx, row in enumerate(data, start=2):
+        for idx, row in enumerate(data, start=2):  # Baris 1 = judul
             if str(row.get("No Urut", "")).strip() == str(no_urut).strip():
                 sheet_bot.update_cell(idx, 8, status_baru)
                 sheet_bot.update_cell(idx, 9, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
@@ -562,6 +564,7 @@ def update_status_bot(no_urut: str, status_baru: str) -> bool:
         print("Update error:", e)
         return False
 
+# Kirim pesan ke Telegram
 def kirim_pesan_bot(chat_id: str, teks: str, tombol=None):
     try:
         res = requests.post(
@@ -571,13 +574,15 @@ def kirim_pesan_bot(chat_id: str, teks: str, tombol=None):
                 "text": teks,
                 "parse_mode": "Markdown",
                 "reply_markup": json.dumps(tombol) if tombol else ""
-            }, timeout=10
+            },
+            timeout=10
         )
         return res.status_code == 200
     except Exception as e:
         print("Kirim pesan error:", e)
         return False
 
+# Proses perintah teks
 def proses_pesan_bot(update):
     pesan = update.get("message", {})
     chat_id = str(pesan.get("chat", {}).get("id", ""))
@@ -605,6 +610,7 @@ Akan muncul tombol pilihan status.
         tombol = {"inline_keyboard": [[{"text": s, "callback_data": f"set|{nomor}|{s}"}] for s in DAFTAR_STATUS]}
         kirim_pesan_bot(chat_id, f"🔧 *Pilih Status untuk Laporan No: {nomor}*", tombol)
 
+# Proses tombol yang diklik
 def proses_callback_bot(update):
     data = update.get("callback_query", {})
     chat_id = str(data.get("message", {}).get("chat", {}).get("id", ""))
@@ -621,30 +627,53 @@ def proses_callback_bot(update):
         timeout=10
     )
 
+# 🚀 PERBAIKAN UTAMA: Logika baca pembaruan agar tidak berulang
 def jalankan_bot():
     offset = 0
+    # Simpan ID pembaruan yang sudah diproses agar tidak dibaca ulang
+    sudah_diproses = set()
     while True:
         try:
             res = requests.get(
                 f"{URL_API}/getUpdates",
                 params={
                     "offset": offset,
-                    "timeout": 15,
+                    "timeout": 10,
                     "allowed_updates": ["message", "callback_query"]
                 },
-                timeout=20
+                timeout=15
             ).json()
+
             if res.get("ok") and res.get("result"):
                 for upd in res["result"]:
-                    offset = upd["update_id"] + 1
+                    update_id = upd["update_id"]
+                    
+                    # Lewati jika sudah diproses sebelumnya
+                    if update_id in sudah_diproses:
+                        offset = update_id + 1
+                        continue
+
+                    # Tandai sebagai sudah diproses
+                    sudah_diproses.add(update_id)
+                    # Geser offset agar tidak dibaca lagi di siklus berikutnya
+                    offset = update_id + 1
+
+                    # Proses pesan atau tombol
                     if "message" in upd:
                         proses_pesan_bot(upd)
                     elif "callback_query" in upd:
                         proses_callback_bot(upd)
+
+                # Batasi jumlah riwayat agar tidak memakan memori
+                if len(sudah_diproses) > 200:
+                    sudah_diproses = set(list(sudah_diproses)[-100:])
+
             time.sleep(1)
+
         except Exception as e:
             print("Bot error:", e)
             time.sleep(3)
 
+# Jalankan bot di latar belakang
 thread_bot = threading.Thread(target=jalankan_bot, daemon=True)
 thread_bot.start()
