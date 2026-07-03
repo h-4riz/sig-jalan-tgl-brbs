@@ -379,7 +379,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
             if tombol_kirim:
                 if not foto:
-                    st.warning("⚠️ Harap ambil foto lokasi terlebih dahulu!")
+                    st.warning("⚠️ Harap ambil foto kerusakan terlebih dahulu!")
                 else:
                     waktu = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                     link_maps = f"https://www.google.com/maps?q={u_lat:.6f},{u_lon:.6f}"
@@ -446,12 +446,18 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             df_laporan = pd.DataFrame(st.session_state["daftar_laporan"])
 
         if not df_laporan.empty:
-            # Urutkan dari laporan terbaru ke terlama
+            # ✅ Perbaiki konversi No Urut: hilangkan nilai kosong/tidak valid
             if "No Urut" in df_laporan.columns:
+                # Ubah ke angka, ganti yang tidak valid jadi NaN
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
+                # Hapus baris yang No Urut-nya kosong
+                df_laporan = df_laporan.dropna(subset=["No Urut"])
+                # Konversi ke bilangan bulat
+                df_laporan["No Urut"] = df_laporan["No Urut"].astype("Int64")
+                # Urutkan dari terbaru ke terlama
                 df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
 
-            # Pilih kolom yang akan ditampilkan di tabel
+            # Pilih kolom yang akan ditampilkan
             kolom_tampil = [
                 "No Urut", "Waktu", "Ruas", "No_Ruas", "KM", 
                 "Jenis_Masalah", "Keterangan", "Status", 
@@ -469,7 +475,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
             if not df_laporan.empty:
-                # Tampilkan tabel utama
                 st.dataframe(
                     df_laporan.drop(columns=["Foto_URL"], errors="ignore"),
                     use_container_width=True,
@@ -488,12 +493,11 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     }
                 )
 
-                # ✅ BAGIAN TAMBAHAN: AREA LIHAT FOTO DI BAWAH TABEL
+                # ✅ Bagian Tampilan Foto
                 st.markdown("---")
                 st.subheader("🖼️ Tampilan Foto Laporan")
 
-                # Buat daftar pilihan nomor laporan
-                daftar_no = ["Pilih nomor laporan..."] + df_laporan["No Urut"].astype(int).astype(str).tolist()
+                daftar_no = ["Pilih nomor laporan..."] + df_laporan["No Urut"].astype(str).tolist()
                 pilihan_no = st.selectbox("Pilih nomor laporan untuk melihat fotonya:", options=daftar_no)
 
                 if pilihan_no != "Pilih nomor laporan...":
@@ -503,9 +507,8 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                         if foto_url and foto_url.startswith("https://"):
                             st.image(foto_url, caption=f"Foto Laporan No {pilihan_no}", use_column_width=True)
                         else:
-                            st.info("ℹ️ Foto belum tersedia untuk laporan ini (hanya laporan baru yang dikirim setelah perbaikan ini akan menyimpan tautan foto).")
+                            st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
 
-                # Tombol unduh data
                 csv = df_laporan.drop(columns=["Foto_URL"], errors="ignore").to_csv(index=False).encode("utf-8")
                 st.download_button(
                     label="📥 Unduh Data Laporan (CSV)",
@@ -519,10 +522,9 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         else:
             st.info("ℹ️ Belum ada laporan yang dikirim.")
     except Exception as e:
-        st.error(f"⚠️ Gagal memuat data: {e}")
+        st.error(f"⚠️ Gagal memuat data: {str(e)}")
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
-
 # --------------------------
 # 🤖 BOT UPDATE STATUS TELEGRAM
 # --------------------------
