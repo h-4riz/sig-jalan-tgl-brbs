@@ -101,6 +101,12 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
                 files={'photo': foto_terkompres},
                 timeout=30
             )
+            if res.status_code == 200:
+                hasil = res.json()
+                foto_file_id = hasil["result"]["photo"][-1]["file_id"]
+                info_file = requests.get(f"https://api.telegram.org/bot{token}/getFile?file_id={foto_file_id}").json()
+                foto_url = f"https://api.telegram.org/file/bot{token}/{info_file['result']['file_path']}"
+                return True, foto_url
         else:
             url = f"https://api.telegram.org/bot{token}/sendMessage"
             res = requests.post(
@@ -108,12 +114,12 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
                 data={"chat_id": chat_id, "text": pesan, "parse_mode": "Markdown"},
                 timeout=20
             )
-        return res.status_code == 200
+        return res.status_code == 200, None
     except Exception as e:
         st.error(f"Kesalahan Telegram: {str(e)}")
-        return False
+        return False, None
 
-def simpan_ke_gsheets(data_baru):
+def simpan_ke_gsheets(data_baru, foto_url=None):
     if not sheet:
         st.warning("⚠️ Tidak terhubung ke Google Sheets, data disimpan sementara di aplikasi.")
         st.session_state["daftar_laporan"].append(data_baru)
@@ -122,7 +128,6 @@ def simpan_ke_gsheets(data_baru):
         semua_data = sheet.get_all_records()
         no_urut = len(semua_data) + 1
 
-        # ✅ Urutan persis sama dengan judul kolom
         row = [
             no_urut,
             data_baru["Waktu"],
@@ -134,7 +139,8 @@ def simpan_ke_gsheets(data_baru):
             data_baru["Status"],
             data_baru["Terakhir_Diperbarui"],
             data_baru["Koordinat"],
-            data_baru["Link_Maps"]
+            data_baru["Link_Maps"],
+            foto_url or ""
         ]
         sheet.append_row(row)
         data_baru["No_Urut"] = no_urut
@@ -143,7 +149,7 @@ def simpan_ke_gsheets(data_baru):
         st.error(f"Gagal menyimpan ke Google Sheets: {str(e)}")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
-    
+
 def perbarui_status_laporan(no_urut, status_baru):
     if not sheet:
         st.error("❌ Tidak terhubung ke Google Sheets.")
@@ -391,14 +397,10 @@ elif st.session_state["halaman_aktif"] == "lapor":
                         "Link_Maps": link_maps
                     }
 
-                    with st.status("Mengirim laporan...", expanded=True):
-                        ok2 = simpan_ke_gsheets(data_laporan)
-                        no_urut = data_laporan.get("No_Urut", "-")
-
-                        pesan_telegram = f"""
+                    pesan_telegram = f"""
 🚨 *LAPORAN KERUSAKAN JALAN*
 ━━━━━━━━━━━━━━━━━━━━━
-🔢 *No Laporan:* {no_urut}
+🔢 *No Laporan:* {len(sheet.get_all_records()) + 1 if sheet else "-"}
 📍 *Ruas Jalan:* {atr['nama']}
 🔢 *Nomor Ruas:* {atr['no']}
 ⚠️ *Masalah:* {tipe_masalah}
@@ -407,8 +409,12 @@ elif st.session_state["halaman_aktif"] == "lapor":
 🌍 *Lokasi:* {link_maps}
 📊 *Status:* 📥 Baru Dilaporkan
 ━━━━━━━━━━━━━━━━━━━━━
-                        """
-                        ok1 = kirim_laporan_lengkap(pesan_telegram, foto)
+                    """
+
+                    with st.status("Mengirim laporan...", expanded=True):
+                        ok1, foto_url = kirim_laporan_lengkap(pesan_telegram, foto)
+                        ok2 = simpan_ke_gsheets(data_laporan, foto_url)
+                        no_urut = data_laporan.get("No_Urut", "-")
 
                         if ok1 and ok2:
                             st.success(f"✅ Laporan berhasil dikirim! Nomor laporan Anda: **{no_urut}**")
@@ -440,29 +446,18 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             df_laporan = pd.DataFrame(st.session_state["daftar_laporan"])
 
         if not df_laporan.empty:
-            # Urutkan dari terbaru ke terlama
             if "No Urut" in df_laporan.columns:
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
                 df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
 
-            # ✅ Pilih kolom yang ingin ditampilkan saja, urutannya sesuai kebutuhan
             kolom_tampil = [
-                "No Urut",
-                "Waktu",
-                "Ruas",
-                "No_Ruas",
-                "KM",
-                "Jenis_Masalah",
-                "Keterangan",
-                "Status",
-                "Terakhir_Diperbarui",
-                "Link_Maps"
+                "No Urut", "Waktu", "Ruas", "No_Ruas", "KM", 
+                "Jenis_Masalah", "Keterangan", "Status", 
+                "Terakhir_Diperbarui", "Link_Maps", "Foto_URL"
             ]
-            # Ambil hanya kolom yang ada agar tidak error
             kolom_tersedia = [k for k in kolom_tampil if k in df_laporan.columns]
             df_laporan = df_laporan[kolom_tersedia]
 
-            # Filter
             if filter_status != "Semua":
                 df_laporan = df_laporan[df_laporan["Status"] == filter_status]
             if filter_ruas != "Semua":
@@ -472,7 +467,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
             if not df_laporan.empty:
                 st.dataframe(
-                    df_laporan,
+                    df_laporan.drop(columns=["Foto_URL"], errors="ignore"),
                     use_container_width=True,
                     hide_index=True,
                     column_config={
@@ -489,7 +484,24 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     }
                 )
 
-                csv = df_laporan.to_csv(index=False).encode("utf-8")
+                st.markdown("---")
+                st.subheader("🖼️ Tampilan Foto Laporan")
+
+                pilihan_no = st.selectbox(
+                    "Pilih nomor laporan untuk melihat fotonya:",
+                    options=["Pilih nomor..."] + df_laporan["No Urut"].astype(int).astype(str).tolist()
+                )
+
+                if pilihan_no != "Pilih nomor...":
+                    baris = df_laporan[df_laporan["No Urut"].astype(str) == pilihan_no]
+                    if not baris.empty:
+                        foto_url = baris.iloc[0].get("Foto_URL", "")
+                        if foto_url and str(foto_url).startswith("http"):
+                            st.image(foto_url, caption=f"Foto Laporan No {pilihan_no}", use_column_width=True)
+                        else:
+                            st.info("ℹ️ Foto tidak tersedia untuk laporan ini.")
+
+                csv = df_laporan.drop(columns=["Foto_URL"], errors="ignore").to_csv(index=False).encode("utf-8")
                 st.download_button(
                     label="📥 Unduh Data Laporan (CSV)",
                     data=csv,
@@ -505,21 +517,21 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         st.error(f"⚠️ Gagal memuat data: {e}")
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
+
 # --------------------------
-# 🤖 BOT UPDATE STATUS TELEGRAM (VERSI PERBAIKAN AKHIR)
+# 🤖 BOT UPDATE STATUS TELEGRAM
 # --------------------------
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 GSHEETS_URL = st.secrets["gsheets_url"]
 IZIN_CHAT_ID = ["-1003492896109"]
 DAFTAR_STATUS = [
     "📥 Baru Dilaporkan",
-    "⚙️ Dalam Proses Perbaikan",
+    "⚙️ Sedang Diproses",
     "✅ Sesuai Kondisi Penanganan",
-    "❌ Ditunda / Masuk Rencana Penanganan Lanjut"
+    "❌ Ditunda / Tidak Dapat Ditangani"
 ]
 URL_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-# Koneksi ke sheet khusus bot
 def koneksi_sheet_bot():
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     info = dict(st.secrets["connections"]["gsheets"])
@@ -528,20 +540,13 @@ def koneksi_sheet_bot():
 
 sheet_bot = koneksi_sheet_bot()
 
-# Fungsi update status: sesuaikan urutan kolom dengan benar
 def update_status_bot(no_urut: str, status_baru: str) -> bool:
     try:
         data = sheet_bot.get_all_records()
         if not data:
             return False
-        # Cari berdasarkan nomor urut
-        for idx, row in enumerate(data, start=2):  # Baris 1 = judul, data mulai baris 2
+        for idx, row in enumerate(data, start=2):
             if str(row.get("No Urut", "")).strip() == str(no_urut).strip():
-                # Sesuaikan nomor kolom:
-                # Kolom 1 = No Urut
-                # Kolom 2 = Waktu
-                # Kolom 8 = Status
-                # Kolom 9 = Terakhir Diperbarui
                 sheet_bot.update_cell(idx, 8, status_baru)
                 sheet_bot.update_cell(idx, 9, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
                 return True
@@ -602,14 +607,13 @@ def proses_callback_bot(update):
         return
     _, nomor, status = data_aksi.split("|", 2)
     ok = update_status_bot(nomor, status)
-    teks = f"✅ *Status Berhasil Diperbarui*\n📌 No Laporan: {nomor}\n📊 Status: {status}" if ok else f"❌ *Laporan Tidak Ditemukan*\nNomor {nomor} tidak ada / kolom belum disesuaikan."
+    teks = f"✅ *Status Berhasil Diperbarui*\n📌 No Laporan: {nomor}\n📊 Status: {status}" if ok else f"❌ *Laporan Tidak Ditemukan*\nNomor {nomor} tidak ada di daftar."
     requests.post(
         f"{URL_API}/editMessageText",
         data={"chat_id": chat_id, "message_id": pesan_id, "text": teks, "parse_mode": "Markdown"},
         timeout=10
     )
 
-# Perbaikan utama: tidak ada lagi pesan berulang
 def jalankan_bot():
     offset = 0
     while True:
@@ -625,7 +629,6 @@ def jalankan_bot():
             ).json()
             if res.get("ok") and res.get("result"):
                 for upd in res["result"]:
-                    # Geser offset SEBELUM memproses, agar tidak dibaca ulang
                     offset = upd["update_id"] + 1
                     if "message" in upd:
                         proses_pesan_bot(upd)
@@ -638,4 +641,3 @@ def jalankan_bot():
 
 thread_bot = threading.Thread(target=jalankan_bot, daemon=True)
 thread_bot.start()
-
