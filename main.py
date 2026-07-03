@@ -13,6 +13,7 @@ import io
 import gspread
 from google.oauth2.service_account import Credentials
 import threading
+import time
 
 # --------------------------
 # KONFIGURASI AWAL + PWA
@@ -541,20 +542,38 @@ def proses_callback_bot(update):
 
 def jalankan_bot():
     offset = 0
+    # Simpan ID pesan yang sudah diproses agar tidak diulang
+    pesan_diproses = set()
     while True:
         try:
-            res = requests.get(f"{URL_API}/getUpdates", params={"offset": offset, "timeout": 30}).json()
-            if res["ok"]:
+            res = requests.get(
+                f"{URL_API}/getUpdates",
+                params={"offset": offset, "timeout": 20, "allowed_updates": ["message", "callback_query"]},
+                timeout=25
+            ).json()
+            if res.get("ok") and res.get("result"):
                 for upd in res["result"]:
-                    offset = upd["update_id"] + 1
+                    update_id = upd["update_id"]
+                    # Langsung geser offset agar tidak dibaca lagi
+                    offset = update_id + 1
+
+                    # Lewati jika sudah diproses sebelumnya
+                    if update_id in pesan_diproses:
+                        continue
+                    pesan_diproses.add(update_id)
+                    # Batasi jumlah riwayat agar tidak memakan memori
+                    if len(pesan_diproses) > 200:
+                        pesan_diproses = set(list(pesan_diproses)[-100:])
+
                     if "message" in upd:
                         proses_pesan_bot(upd)
                     elif "callback_query" in upd:
                         proses_callback_bot(upd)
+
         except Exception as e:
             print("Bot error:", e)
+            time.sleep(3)  # Jeda sebentar jika ada gangguan jaringan
             continue
-
 # Jalankan bot di latar belakang
 thread_bot = threading.Thread(target=jalankan_bot, daemon=True)
 thread_bot.start()
