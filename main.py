@@ -446,10 +446,12 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             df_laporan = pd.DataFrame(st.session_state["daftar_laporan"])
 
         if not df_laporan.empty:
+            # Urutkan dari laporan terbaru ke terlama
             if "No Urut" in df_laporan.columns:
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
                 df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
 
+            # Pilih kolom yang akan ditampilkan di tabel
             kolom_tampil = [
                 "No Urut", "Waktu", "Ruas", "No_Ruas", "KM", 
                 "Jenis_Masalah", "Keterangan", "Status", 
@@ -458,6 +460,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             kolom_tersedia = [k for k in kolom_tampil if k in df_laporan.columns]
             df_laporan = df_laporan[kolom_tersedia]
 
+            # Filter data
             if filter_status != "Semua":
                 df_laporan = df_laporan[df_laporan["Status"] == filter_status]
             if filter_ruas != "Semua":
@@ -466,6 +469,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
             if not df_laporan.empty:
+                # Tampilkan tabel utama
                 st.dataframe(
                     df_laporan.drop(columns=["Foto_URL"], errors="ignore"),
                     use_container_width=True,
@@ -484,23 +488,24 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     }
                 )
 
+                # ✅ BAGIAN TAMBAHAN: AREA LIHAT FOTO DI BAWAH TABEL
                 st.markdown("---")
                 st.subheader("🖼️ Tampilan Foto Laporan")
 
-                pilihan_no = st.selectbox(
-                    "Pilih nomor laporan untuk melihat fotonya:",
-                    options=["Pilih nomor..."] + df_laporan["No Urut"].astype(int).astype(str).tolist()
-                )
+                # Buat daftar pilihan nomor laporan
+                daftar_no = ["Pilih nomor laporan..."] + df_laporan["No Urut"].astype(int).astype(str).tolist()
+                pilihan_no = st.selectbox("Pilih nomor laporan untuk melihat fotonya:", options=daftar_no)
 
-                if pilihan_no != "Pilih nomor...":
-                    baris = df_laporan[df_laporan["No Urut"].astype(str) == pilihan_no]
-                    if not baris.empty:
-                        foto_url = baris.iloc[0].get("Foto_URL", "")
-                        if foto_url and str(foto_url).startswith("http"):
+                if pilihan_no != "Pilih nomor laporan...":
+                    baris_pilih = df_laporan[df_laporan["No Urut"].astype(str) == pilihan_no]
+                    if not baris_pilih.empty:
+                        foto_url = baris_pilih.iloc[0].get("Foto_URL", "").strip()
+                        if foto_url and foto_url.startswith("https://"):
                             st.image(foto_url, caption=f"Foto Laporan No {pilihan_no}", use_column_width=True)
                         else:
-                            st.info("ℹ️ Foto tidak tersedia untuk laporan ini.")
+                            st.info("ℹ️ Foto belum tersedia untuk laporan ini (hanya laporan baru yang dikirim setelah perbaikan ini akan menyimpan tautan foto).")
 
+                # Tombol unduh data
                 csv = df_laporan.drop(columns=["Foto_URL"], errors="ignore").to_csv(index=False).encode("utf-8")
                 st.download_button(
                     label="📥 Unduh Data Laporan (CSV)",
