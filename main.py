@@ -428,7 +428,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
     col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Dalam Proses Perbaikan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Rencana Penanganan Lanjut"])
+    with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Diproses", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Tidak Dapat Ditangani"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
@@ -445,6 +445,15 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
                 df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
 
+            # ✅ HAPUS KOLOM YANG TIDAK PERLU / BERULANG
+            kolom_tampil = [
+                "No Urut", "Waktu", "Ruas", "No_Ruas", "KM", 
+                "Jenis_Masalah", "Keterangan", "Status", "Terakhir_Diperbarui", "Link_Maps"
+            ]
+            # Ambil hanya kolom yang ada saja agar tidak error
+            kolom_tersedia = [kol for kol in kolom_tampil if kol in df_laporan.columns]
+            df_laporan = df_laporan[kolom_tersedia]
+
             if filter_status != "Semua":
                 df_laporan = df_laporan[df_laporan["Status"] == filter_status]
             if filter_ruas != "Semua":
@@ -459,7 +468,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     hide_index=True,
                     column_config={
                         "No Urut": st.column_config.NumberColumn("No Laporan", width="small"),
-                        "Link_Maps": st.column_config.LinkColumn("Lihat Lokasi", display_text="Buka Peta"),
+                        "Link_Maps": st.column_config.LinkColumn("Lihat Lokasi", display_text="Buka Peta", width="medium"),
                         "Waktu": st.column_config.TextColumn("Waktu Lapor", width="medium"),
                         "Status": st.column_config.TextColumn("Status Penanganan", width="medium"),
                         "Terakhir_Diperbarui": st.column_config.TextColumn("Diperbarui Pada", width="medium")
@@ -482,7 +491,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         st.error(f"⚠️ Gagal memuat data: {e}")
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
-
 # --------------------------
 # 🤖 BOT UPDATE STATUS TELEGRAM (VERSI PERBAIKAN AKHIR)
 # --------------------------
