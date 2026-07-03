@@ -119,22 +119,22 @@ def simpan_ke_gsheets(data_baru):
         st.session_state["daftar_laporan"].append(data_baru)
         return False
     try:
-        # Hitung nomor urut otomatis
         semua_data = sheet.get_all_records()
         no_urut = len(semua_data) + 1
 
+        # ✅ Urutan persis sama dengan judul kolom
         row = [
-            no_urut,                # Kolom 1: No Urut
-            data_baru["Waktu"],     # Kolom 2: Waktu Lapor
-            data_baru["Ruas"],      # Kolom 3: Nama Ruas
-            data_baru["No_Ruas"],   # Kolom 4: Nomor Ruas
-            data_baru["KM"],        # Kolom 5: Titik KM
-            data_baru["Jenis_Masalah"], # Kolom 6: Jenis Masalah
-            data_baru["Keterangan"],    # Kolom 7: Keterangan
-            data_baru["Status"],        # Kolom 8: Status
-            data_baru["Terakhir_Diperbarui"], # Kolom 9: Waktu Update
-            data_baru["Koordinat"],     # Kolom 10: Koordinat
-            data_baru["Link_Maps"]      # Kolom 11: Link Peta
+            no_urut,
+            data_baru["Waktu"],
+            data_baru["Ruas"],
+            data_baru["No_Ruas"],
+            data_baru["KM"],
+            data_baru["Jenis_Masalah"],
+            data_baru["Keterangan"],
+            data_baru["Status"],
+            data_baru["Terakhir_Diperbarui"],
+            data_baru["Koordinat"],
+            data_baru["Link_Maps"]
         ]
         sheet.append_row(row)
         data_baru["No_Urut"] = no_urut
@@ -143,7 +143,7 @@ def simpan_ke_gsheets(data_baru):
         st.error(f"Gagal menyimpan ke Google Sheets: {str(e)}")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
-
+    
 def perbarui_status_laporan(no_urut, status_baru):
     if not sheet:
         st.error("❌ Tidak terhubung ke Google Sheets.")
@@ -440,20 +440,29 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             df_laporan = pd.DataFrame(st.session_state["daftar_laporan"])
 
         if not df_laporan.empty:
-            # ✅ Urutkan dari nomor terbesar (laporan terbaru) ke terkecil
+            # Urutkan dari terbaru ke terlama
             if "No Urut" in df_laporan.columns:
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
                 df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
 
-            # ✅ HAPUS KOLOM YANG TIDAK PERLU / BERULANG
+            # ✅ Pilih kolom yang ingin ditampilkan saja, urutannya sesuai kebutuhan
             kolom_tampil = [
-                "No Urut", "Waktu", "Ruas", "No_Ruas", "KM", 
-                "Jenis_Masalah", "Keterangan", "Status", "Terakhir_Diperbarui", "Link_Maps"
+                "No Urut",
+                "Waktu",
+                "Ruas",
+                "No_Ruas",
+                "KM",
+                "Jenis_Masalah",
+                "Keterangan",
+                "Status",
+                "Terakhir_Diperbarui",
+                "Link_Maps"
             ]
-            # Ambil hanya kolom yang ada saja agar tidak error
-            kolom_tersedia = [kol for kol in kolom_tampil if kol in df_laporan.columns]
+            # Ambil hanya kolom yang ada agar tidak error
+            kolom_tersedia = [k for k in kolom_tampil if k in df_laporan.columns]
             df_laporan = df_laporan[kolom_tersedia]
 
+            # Filter
             if filter_status != "Semua":
                 df_laporan = df_laporan[df_laporan["Status"] == filter_status]
             if filter_ruas != "Semua":
@@ -468,10 +477,15 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     hide_index=True,
                     column_config={
                         "No Urut": st.column_config.NumberColumn("No Laporan", width="small"),
-                        "Link_Maps": st.column_config.LinkColumn("Lihat Lokasi", display_text="Buka Peta", width="medium"),
                         "Waktu": st.column_config.TextColumn("Waktu Lapor", width="medium"),
+                        "Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
+                        "No_Ruas": st.column_config.TextColumn("No Ruas", width="small"),
+                        "KM": st.column_config.TextColumn("Titik KM", width="small"),
+                        "Jenis_Masalah": st.column_config.TextColumn("Jenis Masalah", width="medium"),
+                        "Keterangan": st.column_config.TextColumn("Keterangan", width="large"),
                         "Status": st.column_config.TextColumn("Status Penanganan", width="medium"),
-                        "Terakhir_Diperbarui": st.column_config.TextColumn("Diperbarui Pada", width="medium")
+                        "Terakhir_Diperbarui": st.column_config.TextColumn("Diperbarui Pada", width="medium"),
+                        "Link_Maps": st.column_config.LinkColumn("Lihat Lokasi", display_text="Buka Peta", width="medium")
                     }
                 )
 
