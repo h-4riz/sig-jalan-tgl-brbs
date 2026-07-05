@@ -300,7 +300,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
     data_jalan = load_data_jalan()
 
-    # Mode lokasi tetap seperti sebelumnya
+    # Mode lokasi
     mode_kerja = st.selectbox(
         "Pilih Cara Pengisian Lokasi",
         options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
@@ -372,6 +372,32 @@ elif st.session_state["halaman_aktif"] == "lapor":
     with st.container():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("📝 Isi Laporan Kerusakan")
+
+        # --------------------------
+        # ✅ BAGIAN KAMERA: DIPINDAH KELUAR DARI FORM
+        # --------------------------
+        if "kamera_aktif" not in st.session_state:
+            st.session_state["kamera_aktif"] = False
+
+        foto = None
+
+        if not st.session_state["kamera_aktif"]:
+            if st.button("📸 Ambil Foto Lokasi", use_container_width=True, type="primary"):
+                st.session_state["kamera_aktif"] = True
+                st.rerun()
+        else:
+            foto = st.camera_input("🔍 Ambil foto kondisi lokasi", key="input_foto_laporan")
+            if foto:
+                st.success("✅ Foto sudah diambil dan siap dikirim")
+            if st.button("❌ Tutup Kamera", use_container_width=True):
+                st.session_state["kamera_aktif"] = False
+                st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # --------------------------
+        # ✅ FORMULIR UTAMA
+        # --------------------------
         with st.form("form_laporan", clear_on_submit=True):
             tipe_masalah = st.selectbox(
                 "Jenis Masalah",
@@ -394,26 +420,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
                 max_chars=300
             )
 
-            # --------------------------
-            # ✅ KAMERA TIDAK AKTIF OTOMATIS
-            # --------------------------
-            if "kamera_aktif" not in st.session_state:
-                st.session_state["kamera_aktif"] = False
-
-            foto = None
-
-            if not st.session_state["kamera_aktif"]:
-                if st.button("📸 Ambil Foto Lokasi", use_container_width=True, type="primary"):
-                    st.session_state["kamera_aktif"] = True
-                    st.rerun()
-            else:
-                foto = st.camera_input("🔍 Ambil foto kondisi lokasi", key="input_foto_laporan")
-                if foto:
-                    st.success("✅ Foto sudah diambil")
-                if st.button("❌ Tutup Kamera", use_container_width=True):
-                    st.session_state["kamera_aktif"] = False
-                    st.rerun()
-
             st.markdown("<br>", unsafe_allow_html=True)
 
             kirim, reset = st.columns(2)
@@ -424,7 +430,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
             if tombol_kirim:
                 if not foto:
-                    st.warning("⚠️ Harap ambil foto lokasi terlebih dahulu!")
+                    st.warning("⚠️ Harap ambil foto lokasi terlebih dahulu dengan menekan tombol 'Ambil Foto Lokasi' di atas!")
                 else:
                     waktu = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                     link_maps = f"https://www.google.com/maps?q={u_lat:.6f},{u_lon:.6f}"
@@ -456,7 +462,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
 ━━━━━━━━━━━━━━━━━━━━━
                     """
 
-                    # ✅ DEFINISIKAN VARIABEL OK1 DAN OK2 DENGAN JELAS
                     with st.status("Mengirim laporan...", expanded=True):
                         ok1, foto_url = kirim_laporan_lengkap(pesan_telegram, foto)
                         ok2 = simpan_ke_gsheets(data_laporan, foto_url)
@@ -465,7 +470,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
                         if ok1 and ok2:
                             st.success(f"✅ Laporan berhasil dikirim! Nomor laporan Anda: **{no_urut}**")
                             st.balloons()
-                            st.session_state["kamera_aktif"] = False  # Reset kamera
+                            st.session_state["kamera_aktif"] = False
                         else:
                             st.warning("⚠️ Laporan terkirim, tersimpan sementara. Akan disinkronkan nanti.")
 
