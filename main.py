@@ -422,7 +422,43 @@ elif st.session_state["halaman_aktif"] == "lapor":
                         else:
                             st.warning("⚠️ Laporan terkirim, tersimpan sementara. Akan disinkronkan nanti.")
         st.markdown("</div>", unsafe_allow_html=True)
+# --------------------------
+# ✅ BAGIAN KAMERA: TIDAK AKTIF OTOMATIS
+# --------------------------
+# Inisialisasi status kamera jika belum ada
+if "kamera_aktif" not in st.session_state:
+    st.session_state["kamera_aktif"] = False
 
+# Tampilkan tombol saja di awal, kamera baru muncul setelah diklik
+if not st.session_state["kamera_aktif"]:
+    foto = None
+    if st.button("📸 Ambil Foto Lokasi", use_container_width=True, type="primary"):
+        st.session_state["kamera_aktif"] = True
+        st.rerun()
+else:
+    # Kamera baru ditampilkan setelah tombol ditekan
+    foto = st.camera_input("🔍 Ambil foto kondisi lokasi", key="input_foto_laporan")
+    
+    # Tombol untuk menutup kamera
+    if st.button("❌ Tutup Kamera", use_container_width=True):
+        st.session_state["kamera_aktif"] = False
+        st.rerun()
+
+# Tampilkan pesan jika foto sudah diambil
+if foto is not None:
+    st.success("✅ Foto sudah tersimpan, siap dikirim")
+
+# Setelah berhasil kirim laporan
+if ok1 and ok2:
+    st.success(f"✅ Laporan berhasil dikirim! Nomor laporan Anda: **{no_urut}**")
+    st.balloons()
+    # Reset status kamera
+    st.session_state["kamera_aktif"] = False
+
+# Jika tombol batal ditekan
+if tombol_reset:
+    st.session_state["kamera_aktif"] = False
+    st.rerun()    
 # --------------------------
 # HALAMAN RIWAYAT & STATUS
 # --------------------------
