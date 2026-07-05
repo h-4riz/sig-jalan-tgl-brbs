@@ -1,7 +1,7 @@
 # --------------------------
 # 🤖 BOT UPDATE STATUS TELEGRAM (VERSI FINAL ANTI-ULANG & STABIL)
 # --------------------------
-TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
+TELEGRAM_TOKEN = st.secrets["8016748185:AAF6ynm16h2ea1-674Q1EfBQtRnArlZSP_U"]
 GSHEETS_URL = st.secrets["gsheets_url"]
 IZIN_CHAT_ID = ["-1003492896109"]  # ID Grup
 DAFTAR_STATUS = [
