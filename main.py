@@ -301,22 +301,34 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
     data_jalan = load_data_jalan()
 
+    # --------------------------
+    # ✅ TAMBAHAN: PILIHAN MODE
+    # --------------------------
+    mode_kerja = st.selectbox(
+        "Pilih Cara Pengisian Lokasi",
+        options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
+    )
+
     col1, col2 = st.columns(2)
     with col1: mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
-    with col2: mode_lokasi = st.selectbox("Sumber Lokasi", ["Mode Simulasi", "GPS Langsung"])
 
-    if mode_lokasi == "Mode Simulasi":
-        loc = [-6.9833, 109.1333]
-    else:
+    # --------------------------
+    # Ambil atau masukkan koordinat sesuai mode
+    # --------------------------
+    if mode_kerja == "📍 Gunakan GPS Otomatis":
         loc = streamlit_js_eval(
             js_expressions='new Promise((resolve) => { navigator.geolocation.getCurrentPosition((p) => resolve([p.coords.latitude, p.coords.longitude]), (e) => resolve([-6.98, 109.13]), {enableHighAccuracy:true, timeout:8000}); })',
             key='gps_aktif'
         )
+        u_lat, u_lon = (loc[0], loc[1]) if isinstance(loc, list) else (-6.98, 109.13)
+    else:
+        # Mode input manual
+        u_lat = st.number_input("Garis Lintang (Latitude)", value=-6.98, format="%.6f")
+        u_lon = st.number_input("Garis Bujur (Longitude)", value=109.13, format="%.6f")
 
-    u_lat, u_lon = (loc[0], loc[1]) if isinstance(loc, list) else (-6.98, 109.13)
     display_lat, display_lon, is_snapped, closest_feature = u_lat, u_lon, False, None
 
-    if isinstance(loc, list) and data_jalan:
+    if data_jalan:
         user_point = Point(u_lon, u_lat)
         min_dist = float('inf')
         target_f = None
@@ -367,9 +379,47 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("📝 Isi Laporan Kerusakan")
         with st.form("form_laporan", clear_on_submit=True):
-            tipe_masalah = st.selectbox("Jenis Masalah", ["Lubang Jalan", "Jalan Amblas", "Kerusakan Bahu Jalan", "Drainase/Gorong-gorong", "Bencana Alam", "Rambu Hilang/Rusak", "Lainnya"])
-            keterangan = st.text_area("Keterangan Tambahan", placeholder="Jelaskan kondisi secara rinci...", max_chars=300)
-            foto = st.camera_input("Ambil Foto Kondisi Lokasi")
+            tipe_masalah = st.selectbox(
+                "Jenis Masalah",
+                [
+                    "Lubang Jalan",
+                    "Jalan Amblas",
+                    "Kerusakan Bahu Jalan",
+                    "Drainase/Gorong-gorong Rusak",
+                    "Bencana Alam",
+                    "Rambu Lalu Lintas Hilang/Rusak",
+                    "Pagar Pengaman Rusak",
+                    "Tanah Longsor",
+                    "Genangan Air",
+                    "Lainnya"
+                ]
+            )
+            keterangan = st.text_area(
+                "Keterangan Tambahan",
+                placeholder="Jelaskan kondisi kerusakan, ukuran, atau hal lain yang perlu diketahui...",
+                max_chars=300
+            )
+
+            # --------------------------
+            # ✅ PERBAIKAN: KAMERA TIDAK AKTIF OTOMATIS
+            # --------------------------
+            if "buka_kamera" not in st.session_state:
+                st.session_state["buka_kamera"] = False
+
+            if not st.session_state["buka_kamera"]:
+                if st.button("📸 Ambil Foto Lokasi", use_container_width=True):
+                    st.session_state["buka_kamera"] = True
+                    st.rerun()
+                foto = None
+            else:
+                foto = st.camera_input("Ambil Foto Kondisi Jalan", key="kamera_laporan")
+                if foto:
+                    st.success("✅ Foto sudah diambil!")
+                if st.button("❌ Tutup Kamera", use_container_width=True):
+                    st.session_state["buka_kamera"] = False
+                    st.rerun()
+
+            st.markdown("<br>", unsafe_allow_html=True)
 
             kirim, reset = st.columns(2)
             with kirim:
@@ -379,7 +429,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
             if tombol_kirim:
                 if not foto:
-                    st.warning("⚠️ Harap ambil foto kerusakan terlebih dahulu!")
+                    st.warning("⚠️ Harap ambil foto lokasi terlebih dahulu dengan menekan tombol 'Ambil Foto Lokasi'!")
                 else:
                     waktu = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                     link_maps = f"https://www.google.com/maps?q={u_lat:.6f},{u_lon:.6f}"
@@ -403,9 +453,9 @@ elif st.session_state["halaman_aktif"] == "lapor":
 🔢 *No Laporan:* {len(sheet.get_all_records()) + 1 if sheet else "-"}
 📍 *Ruas Jalan:* {atr['nama']}
 🔢 *Nomor Ruas:* {atr['no']}
-⚠️ *Masalah:* {tipe_masalah}
+⚠️ *Jenis Masalah:* {tipe_masalah}
 📝 *Keterangan:* {keterangan or "-"}
-⏰ *Waktu:* {waktu}
+⏰ *Waktu Lapor:* {waktu}
 🌍 *Lokasi:* {link_maps}
 📊 *Status:* 📥 Baru Dilaporkan
 ━━━━━━━━━━━━━━━━━━━━━
@@ -419,10 +469,15 @@ elif st.session_state["halaman_aktif"] == "lapor":
                         if ok1 and ok2:
                             st.success(f"✅ Laporan berhasil dikirim! Nomor laporan Anda: **{no_urut}**")
                             st.balloons()
+                            # Reset kamera setelah kirim
+                            st.session_state["buka_kamera"] = False
                         else:
                             st.warning("⚠️ Laporan terkirim, tersimpan sementara. Akan disinkronkan nanti.")
-        st.markdown("</div>", unsafe_allow_html=True)
 
+            if tombol_reset:
+                st.session_state["buka_kamera"] = False
+                st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 # --------------------------
 # HALAMAN RIWAYAT & STATUS
 # --------------------------
