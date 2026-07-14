@@ -721,3 +721,17 @@ if "bot_berjalan" not in st.session_state:
     thread.start()
 else:
     print("ℹ️ Bot sudah berjalan sebelumnya.")
+
+# TAMBAHKAN BARIS INI DI PALING ATAS
+import streamlit as st
+import requests
+import json
+import datetime
+import gspread
+from google.oauth2.service_account import Credentials
+
+# Kemudian tulis token dengan benar:
+TELEGRAM_TOKEN = "8016748185:AAF6ynm16h2ea1-674Q1EfBQtRnArlZSP_U"
+
+# Atau jika ingin tetap pakai secrets:
+# TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
