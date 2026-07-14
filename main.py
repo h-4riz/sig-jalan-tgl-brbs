@@ -574,13 +574,16 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
 # --------------------------
-# 🤖 BOT UPDATE STATUS TELEGRAM (FINAL FIX)
+# 🤖 BOT TELEGRAM VERSI TERPISAH (PASTI BERJALAN)
 # --------------------------
+import sys
+
 def jalankan_bot():
+    print("🔄 Memulai inisialisasi bot...")
     try:
         TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
         GSHEETS_URL = st.secrets["gsheets_url"]
-        IZIN_CHAT_ID = [-1003492896109]  # Pastikan angka ini SAMA PERSIS
+        IZIN_CHAT_ID = [-1003492896109]
         DAFTAR_STATUS = [
             "📥 Baru Dilaporkan",
             "⚙️ Sedang Dalam Proses Penanganan",
@@ -589,127 +592,132 @@ def jalankan_bot():
         ]
         URL_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-        # Reset offset yang terjebak SEKALI saat mulai
-        requests.get(f"{URL_API}/getUpdates?offset=-1", timeout=10)
-        print("✅ Bot siap & update lama dibersihkan!")
+        # WAJIB: Bersihkan pesan yang terjebak SEKALI saat mulai
+        print("🧹 Membersihkan update lama yang terjebak...")
+        bersihkan = requests.get(f"{URL_API}/getUpdates?offset=-1", timeout=10).json()
+        print(f"✅ Bersihkan selesai: {bersihkan}")
 
-        def koneksi_sheet_bot():
+        def koneksi_sheet():
             scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
             info = dict(st.secrets["connections"]["gsheets"])
             creds = Credentials.from_service_account_info(info, scopes=scopes)
             return gspread.authorize(creds).open_by_url(GSHEETS_URL).sheet1
 
-        def update_status_bot(no_urut: str, status_baru: str) -> bool:
+        def update_status(no_urut: str, status_baru: str) -> bool:
             try:
-                sheet = koneksi_sheet_bot()
+                sheet = koneksi_sheet()
                 data = sheet.get_all_records()
                 for idx, row in enumerate(data, start=2):
                     if str(row.get("No Urut", "")).strip() == str(no_urut).strip():
                         sheet.update_cell(idx, 8, status_baru)
                         sheet.update_cell(idx, 9, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+                        print(f"✅ Status laporan {no_urut} diperbarui jadi: {status_baru}")
                         return True
+                print(f"❌ Laporan nomor {no_urut} tidak ditemukan di sheet")
                 return False
             except Exception as e:
-                print(f"❌ Gagal update sheet: {e}")
+                print(f"❌ Error akses Google Sheets: {e}")
                 return False
 
-        def kirim_pesan_bot(chat_id: int, teks: str, tombol=None):
+        def kirim_pesan(chat_id: int, teks: str, tombol=None):
             try:
-                data = {"chat_id": chat_id, "text": teks, "parse_mode": "Markdown"}
+                payload = {"chat_id": chat_id, "text": teks, "parse_mode": "Markdown"}
                 if tombol:
-                    data["reply_markup"] = json.dumps(tombol)
-                res = requests.post(f"{URL_API}/sendMessage", data=data, timeout=8)
-                print(f"📤 Balasan dikirim: {res.status_code}")
+                    payload["reply_markup"] = json.dumps(tombol)
+                res = requests.post(f"{URL_API}/sendMessage", data=payload, timeout=8)
+                print(f"📤 Mencoba kirim ke {chat_id}: {res.status_code} | {res.text[:100]}")
                 return res.status_code == 200
             except Exception as e:
                 print(f"❌ Gagal kirim pesan: {e}")
                 return False
 
-        def edit_pesan_bot(chat_id: int, pesan_id: int, teks_baru: str):
-            try:
-                requests.post(
-                    f"{URL_API}/editMessageText",
-                    data={"chat_id": chat_id, "message_id": pesan_id, "text": teks_baru, "parse_mode": "Markdown"},
-                    timeout=8
-                )
-            except Exception as e:
-                print(f"❌ Gagal edit pesan: {e}")
-
-        def jawab_callback(query_id: str, teks: str = "", alert: bool = False):
-            try:
-                requests.post(
-                    f"{URL_API}/answerCallbackQuery",
-                    data={"callback_query_id": query_id, "text": teks[:200], "show_alert": alert},
-                    timeout=5
-                )
-            except Exception as e:
-                print(f"❌ Gagal jawab callback: {e}")
-
         offset = 0
+        print("🚀 Bot siap menerima perintah! Silakan kirim pesan ke Telegram...")
+
         while True:
             try:
                 res = requests.get(
                     f"{URL_API}/getUpdates",
-                    params={"offset": offset, "timeout": 15, "allowed_updates": ["message", "callback_query"]},
-                    timeout=20
+                    params={"offset": offset, "timeout": 20, "allowed_updates": ["message", "callback_query"]},
+                    timeout=25
                 ).json()
 
                 if res.get("ok") and res.get("result"):
                     for upd in res["result"]:
                         offset = upd["update_id"] + 1
-                        print(f"📩 Update diterima: {upd}")  # Log untuk cek
+                        print(f"\n📩 UPDATE BARU DITERIMA: {upd}")
 
-                        # Proses Pesan /update /status
+                        # === PROSES PERINTAH PESAN ===
                         if "message" in upd:
                             pesan = upd["message"]
                             chat_id = pesan["chat"]["id"]
                             teks = pesan.get("text", "").strip()
+                            print(f"✉️ Pesan dari {chat_id}: {teks}")
 
+                            # Cek izin
                             if chat_id not in IZIN_CHAT_ID:
-                                print(f"⛔ Akses ditolak dari {chat_id}")
+                                kirim_pesan(chat_id, "⛔ Maaf, Anda tidak berhak menggunakan bot ini.")
                                 continue
 
-                            if teks in ["/start", "/status"]:
-                                kirim_pesan_bot(chat_id, """📋 *Cara Pakai Bot:*
-Ketik: `/update <nomor_laporan>`
-Contoh: `/update 12`
-Pilih tombol status untuk menyimpan perubahan.
+                            # Respon perintah
+                            if teks == "/start":
+                                kirim_pesan(chat_id, """👋 Halo! Bot siap membantu memperbarui status laporan jalan.
+
+Gunakan perintah:
+`/update <nomor_laporan>`
+
+Contoh:
+`/update 15`
+""")
+                            elif teks == "/status":
+                                kirim_pesan(chat_id, """📋 Panduan Penggunaan:
+Ketik `/update <nomor_laporan>` → pilih tombol status → selesai.
 """)
                             elif teks.startswith("/update "):
                                 nomor = teks.replace("/update ", "").strip()
                                 if not nomor.isdigit():
-                                    kirim_pesan_bot(chat_id, "⚠️ Format salah! Contoh: `/update 5`")
+                                    kirim_pesan(chat_id, "⚠️ Format salah!\nGunakan: `/update 5`")
                                     continue
                                 tombol = {"inline_keyboard": [[{"text": s, "callback_data": f"set|{nomor}|{s}"}] for s in DAFTAR_STATUS]}
-                                kirim_pesan_bot(chat_id, f"🔧 Pilih status untuk laporan No. `{nomor}`:", tombol)
+                                kirim_pesan(chat_id, f"🔧 Pilih status untuk Laporan No. `{nomor}`:", tombol)
+                            else:
+                                kirim_pesan(chat_id, "Gunakan `/start` atau `/update <nomor>` ya.")
 
-                        # Proses Klik Tombol
+                        # === PROSES KLIK TOMBOL ===
                         elif "callback_query" in upd:
                             cb = upd["callback_query"]
                             chat_id = cb["message"]["chat"]["id"]
                             pesan_id = cb["message"]["message_id"]
                             data_aksi = cb["data"]
+                            print(f"🔘 Klik tombol dari {chat_id}: {data_aksi}")
 
                             if chat_id not in IZIN_CHAT_ID or not data_aksi.startswith("set|"):
-                                jawab_callback(cb["id"])
+                                requests.post(f"{URL_API}/answerCallbackQuery", data={"callback_query_id": cb["id"]})
                                 continue
 
                             _, nomor, status = data_aksi.split("|", 2)
-                            berhasil = update_status_bot(nomor, status)
-                            hasil = f"✅ Diperbarui!\nNo: `{nomor}`\nStatus: {status}" if berhasil else f"❌ Gagal! Laporan `{nomor}` tidak ditemukan."
-                            edit_pesan_bot(chat_id, pesan_id, hasil)
-                            jawab_callback(cb["id"], "✅ Selesai" if berhasil else "❌ Tidak ada laporan")
+                            berhasil = update_status(nomor, status)
+                            teks_hasil = f"✅ Berhasil diperbarui!\n📌 Laporan: `{nomor}`\n📊 Status: {status}" if berhasil else f"❌ Gagal!\nLaporan `{nomor}` tidak ada di daftar."
+                            
+                            requests.post(
+                                f"{URL_API}/editMessageText",
+                                data={"chat_id": chat_id, "message_id": pesan_id, "text": teks_hasil, "parse_mode": "Markdown"}
+                            )
+                            requests.post(f"{URL_API}/answerCallbackQuery", data={"callback_query_id": cb["id"], "text": "✅ Selesai" if berhasil else "❌ Gagal"})
 
-                time.sleep(1.5)
+                time.sleep(1)
             except Exception as e:
-                print(f"🔄 Error loop: {e} — coba lagi nanti")
+                print(f"⚠️ Error loop bot: {e} — coba lagi dalam 3 detik")
                 time.sleep(3)
     except Exception as e:
-        print(f"❌ Bot gagal berjalan: {e}")
+        print(f"❌ BOT GAGAL BERJALAN: {e}")
+        print("Kesalahan fatal:", sys.exc_info())
 
-# Jalankan bot
-if not st.session_state.get("bot_berjalan", False):
+# Jalankan bot dengan cara yang pasti berjalan di Streamlit
+if "bot_berjalan" not in st.session_state:
     st.session_state["bot_berjalan"] = True
-    thread_bot = threading.Thread(target=jalankan_bot, daemon=True)
-    thread_bot.start()
-    print("🚀 Thread bot dimulai!")
+    print("🔄 Menjalankan thread bot...")
+    thread = threading.Thread(target=jalankan_bot, daemon=False)  # JANGAN pakai daemon=True!
+    thread.start()
+else:
+    print("ℹ️ Bot sudah berjalan sebelumnya.")
