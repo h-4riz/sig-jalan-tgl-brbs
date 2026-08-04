@@ -513,6 +513,9 @@ elif st.session_state["halaman_aktif"] == "lapor":
 # --------------------------
 # HALAMAN RIWAYAT & STATUS ✅ POPUP AMAN + TIDAK BERKEDIP
 # --------------------------
+# ==================================================
+# HALAMAN RIWAYAT & STATUS — VERSI FINAL
+# ==================================================
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
         st.session_state["halaman_aktif"] = "beranda"
@@ -520,49 +523,42 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # ==============================================
-    # ✅ POPUP FOTO DILETAKKAN DI SINI — LUAR TRY
-    # ==============================================
+    # 🔴 TOMBOL TUTUP — SELALU DI ATAS, TIDAK AKAN TERTUTUP
+    if st.session_state.get("foto_popup_url"):
+        col_tutup, _ = st.columns([1, 6])
+        with col_tutup:
+            if st.button("✕ TUTUP FOTO", type="primary", use_container_width=True):
+                st.session_state["foto_popup_url"] = None
+                st.session_state["foto_popup_no"] = None
+                st.rerun()
+        st.caption("💡 Klik tombol di atas untuk menutup foto")
+        st.markdown("---")
+
+    # 🖼️ POPUP FOTO
     if st.session_state.get("foto_popup_url"):
         foto_url = st.session_state.get("foto_popup_url", "")
         no_lap = st.session_state.get("foto_popup_no", "")
 
         st.markdown(f"""
-        <div style="position:fixed; top:0; left:0; width:100%; height:100%; 
-            background:rgba(0,0,0,0.85); z-index:99999; 
+        <div style="position:fixed; top:80px; left:0; width:100%; height:calc(100% - 80px); 
+            background:rgba(0,0,0,0.85); z-index:99998; 
             display:flex; align-items:center; justify-content:center;">
             <div style="background:white; border-radius:16px; padding:1.5rem; max-width:90%; max-height:85vh; 
-                box-shadow:0 10px 40px rgba(0,0,0,0.35); position:relative;">
+                box-shadow:0 10px 40px rgba(0,0,0,0.35);">
                 <h4 style="color:#023e8a; margin:0 0 1rem 0;">📷 Foto Laporan No. {no_lap}</h4>
                 <img src="{foto_url}" alt="Foto Laporan" 
-                    style="max-width:100%; max-height:70vh; width:auto; height:auto; border-radius:10px;"
-                    onerror="this.parentElement.innerHTML+='<p style=\\'color:red; margin-top:1rem;\\'>⚠️ Foto tidak dapat dimuat (URL tidak valid/tidak dapat diakses)</p>'" />
+                    style="max-width:100%; max-height:70vh; width:auto; height:auto; border-radius:10px; object-fit:contain;" />
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Tombol Tutup — SELALU BISA DIKLIK
-        col_tutup, _ = st.columns([1, 8])
-        with col_tutup:
-            if st.button("✕ Tutup Foto", type="primary", use_container_width=True):
-                st.session_state["foto_popup_url"] = None
-                st.session_state["foto_popup_no"] = None
-                st.rerun()
-
-        st.markdown("---")
-        st.caption("💡 Klik tombol di atas untuk menutup foto")
-
-    # ==============================================
-    # ✅ BARIS FILTER — SETELAH POPUP
-    # ==============================================
+    # === FILTER ===
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
-    # ==============================================
-    # ✅ BARU MASUK KE BLOK TRY
-    # ==============================================
+    # === CACHE DATA ===
     CACHE_DALAM_DETIK = 60
     df_laporan = pd.DataFrame()
 
@@ -571,8 +567,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             waktu_sekarang = datetime.datetime.now()
             perlu_muat_ulang = True
 
-            if ("data_sheet_cache" in st.session_state and 
-                "waktu_muat_data" in st.session_state):
+            if ("data_sheet_cache" in st.session_state and "waktu_muat_data" in st.session_state):
                 selisih = (waktu_sekarang - st.session_state["waktu_muat_data"]).total_seconds()
                 if selisih < CACHE_DALAM_DETIK:
                     perlu_muat_ulang = False
@@ -585,10 +580,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 except Exception as api_err:
                     pesan_error = str(api_err)
                     if "Quota exceeded" in pesan_error or "429" in pesan_error:
-                        st.warning("""
-                        ⏳ Terlalu banyak akses data. Tunggu 1–2 menit lalu coba lagi.
-                        Saat ini tampil menggunakan data yang tersimpan terakhir.
-                        """)
+                        st.warning("⏳ Terlalu banyak akses data. Tunggu 1–2 menit lalu coba lagi. Tampil data tersimpan terakhir.")
                         data = st.session_state.get("data_sheet_cache", [])
                     else:
                         st.error(f"⚠️ Gagal memuat data: {pesan_error}")
@@ -597,11 +589,10 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 data = st.session_state["data_sheet_cache"]
 
             df_laporan = pd.DataFrame(data)
-
         else:
             df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
 
-        # === PROSES DATA ===
+        # === PROSES DATA & TABEL ===
         if not df_laporan.empty:
             if "No Urut" in df_laporan.columns:
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
@@ -668,7 +659,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                         st.session_state["foto_popup_no"] = None
                         st.rerun()
 
-                st.caption("💡 Klik baris untuk lihat foto | Klik tombol Tutup untuk menutup")
+                st.caption("💡 Klik baris untuk lihat foto | Klik tombol TUTUP di atas untuk menutup")
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
