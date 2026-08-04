@@ -511,7 +511,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# HALAMAN RIWAYAT & STATUS ✅ DIPERBARUI
+# HALAMAN RIWAYAT & STATUS ✅ DIPERBAIKI
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -529,8 +529,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             <div class="popup-box">
                 <h4 style="color:#023e8a; margin-bottom:0.5rem;">📷 Foto Laporan No. {no_lap}</h4>
                 <img src="{foto_url}" alt="Foto Laporan" />
-                <div class="popup-tombol-tutup">
-                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -569,43 +567,79 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
             if not df_laporan.empty:
                 # === TABEL HANYA 4 KOLOM ===
-                tampil = []
+                st.markdown("""
+                <style>
+                .foto-link {
+                    color: #fbbf24;
+                    text-decoration: none;
+                    cursor: pointer;
+                    font-weight: 600;
+                }
+                .foto-link:hover {
+                    text-decoration: underline;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+
+                # Siapkan data tabel
+                daftar_tampil = []
+                daftar_foto = {}  # simpan foto_url untuk setiap nomor
+
                 for _, row in df_laporan.iterrows():
                     no_urut = row.get("No Urut", "-")
                     foto_url = str(row.get("Foto_URL", "")).strip()
                     status = str(row.get("Status", "-"))
 
-                    # Tombol Lihat Foto → simpan ke session state
-                    if foto_url and foto_url.startswith("https://"):
-                        if st.button(f"📷 Lihat Foto", key=f"foto_{no_urut}"):
-                            st.session_state["foto_popup_url"] = foto_url
-                            st.session_state["foto_popup_no"] = no_urut
-                            st.rerun()
-                        kolom_status = f"{status} | [Lihat Foto]"
-                    else:
-                        kolom_status = f"{status} | —"
+                    daftar_foto[str(no_urut)] = foto_url
 
-                    tampil.append({
-                        "Nomor": no_urut,
-                        "Waktu": row.get("Waktu", "-"),
-                        "Ruas": row.get("Ruas", "-"),
+                    # Tampilkan status + tautan foto dalam satu teks
+                    if foto_url and foto_url.startswith("https://"):
+                        kolom_status = f"{status}  |  📷 Lihat Foto"
+                    else:
+                        kolom_status = f"{status}"
+
+                    daftar_tampil.append({
+                        "No": no_urut,
+                        "Waktu Lapor": row.get("Waktu", "-"),
+                        "Nama Ruas": row.get("Ruas", "-"),
                         "Status Laporan": kolom_status
                     })
 
-                df_tampil = pd.DataFrame(tampil)
+                df_tampil = pd.DataFrame(daftar_tampil)
+
+                # Tampilkan tabel
                 st.dataframe(
                     df_tampil,
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-                        "Nomor": st.column_config.NumberColumn("No", width="small"),
-                        "Waktu": st.column_config.TextColumn("Waktu Lapor", width="medium"),
-                        "Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
+                        "No": st.column_config.NumberColumn("No", width="small"),
+                        "Waktu Lapor": st.column_config.TextColumn("Waktu Lapor", width="medium"),
+                        "Nama Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
                         "Status Laporan": st.column_config.TextColumn("Status Laporan", width="medium")
                     }
                 )
 
-                st.info("💡 Klik tombol 📷 Lihat Foto untuk membuka foto dalam tampilan di atas tabel")
+                # === PILIHAN NOMOR LAPORAN UNTUK BUKA FOTO ===
+                daftar_no = ["Pilih nomor laporan..."] + [str(x) for x in df_tampil["No"].tolist()]
+                pilihan_no = st.selectbox("📷 Lihat foto laporan nomor:", options=daftar_no)
+
+                if pilihan_no != "Pilih nomor laporan...":
+                    foto_url = daftar_foto.get(pilihan_no, "")
+                    if foto_url and foto_url.startswith("https://"):
+                        st.markdown(f"""
+                        <div class="popup-overlay">
+                            <div class="popup-box">
+                                <h4 style="color:#023e8a; margin-bottom:0.5rem;">📷 Foto Laporan No. {pilihan_no}</h4>
+                                <img src="{foto_url}" alt="Foto Laporan" />
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("✕ Tutup Foto"):
+                            st.session_state["foto_popup_url"] = None
+                            st.rerun()
+                    else:
+                        st.info("ℹ️ Foto belum tersedia.")
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
@@ -623,146 +657,3 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         st.error(f"⚠️ Gagal memuat data: {str(e)}")
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
-
-# --------------------------
-# 🤖 BOT TELEGRAM VERSI TERPISAH
-# --------------------------
-import sys
-
-def jalankan_bot():
-    print("🔄 Memulai inisialisasi bot...")
-    try:
-        TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
-        GSHEETS_URL = st.secrets["gsheets_url"]
-        IZIN_CHAT_ID = [-1003492896109]
-        DAFTAR_STATUS = [
-            "📥 Baru Dilaporkan",
-            "⚙️ Sedang Dalam Proses Penanganan",
-            "✅ Sesuai Kondisi Penanganan",
-            "❌ Ditunda / Masuk Dalam Rencana Penanganan"
-        ]
-        URL_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-
-        print("🧹 Membersihkan update lama yang terjebak...")
-        bersihkan = requests.get(f"{URL_API}/getUpdates?offset=-1", timeout=10).json()
-        print(f"✅ Bersihkan selesai: {bersihkan}")
-
-        def koneksi_sheet():
-            scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-            info = dict(st.secrets["connections"]["gsheets"])
-            creds = Credentials.from_service_account_info(info, scopes=scopes)
-            return gspread.authorize(creds).open_by_url(GSHEETS_URL).sheet1
-
-        def update_status(no_urut: str, status_baru: str) -> bool:
-            try:
-                sheet = koneksi_sheet()
-                data = sheet.get_all_records()
-                for idx, row in enumerate(data, start=2):
-                    if str(row.get("No Urut", "")).strip() == str(no_urut).strip():
-                        sheet.update_cell(idx, 8, status_baru)
-                        sheet.update_cell(idx, 9, datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-                        print(f"✅ Status laporan {no_urut} diperbarui jadi: {status_baru}")
-                        return True
-                print(f"❌ Laporan nomor {no_urut} tidak ditemukan di sheet")
-                return False
-            except Exception as e:
-                print(f"❌ Error akses Google Sheets: {e}")
-                return False
-
-        def kirim_pesan(chat_id: int, teks: str, tombol=None):
-            try:
-                payload = {"chat_id": chat_id, "text": teks, "parse_mode": "Markdown"}
-                if tombol:
-                    payload["reply_markup"] = json.dumps(tombol)
-                res = requests.post(f"{URL_API}/sendMessage", data=payload, timeout=8)
-                print(f"📤 Mencoba kirim ke {chat_id}: {res.status_code} | {res.text[:100]}")
-                return res.status_code == 200
-            except Exception as e:
-                print(f"❌ Gagal kirim pesan: {e}")
-                return False
-
-        offset = 0
-        print("🚀 Bot siap menerima perintah! Silakan kirim pesan ke Telegram...")
-
-        while True:
-            try:
-                res = requests.get(
-                    f"{URL_API}/getUpdates",
-                    params={"offset": offset, "timeout": 20, "allowed_updates": ["message", "callback_query"]},
-                    timeout=25
-                ).json()
-
-                if res.get("ok") and res.get("result"):
-                    for upd in res["result"]:
-                        offset = upd["update_id"] + 1
-                        print(f"\n📩 UPDATE BARU DITERIMA: {upd}")
-
-                        if "message" in upd:
-                            pesan = upd["message"]
-                            chat_id = pesan["chat"]["id"]
-                            teks = pesan.get("text", "").strip()
-                            print(f"✉️ Pesan dari {chat_id}: {teks}")
-
-                            if chat_id not in IZIN_CHAT_ID:
-                                kirim_pesan(chat_id, "⛔ Maaf, Anda tidak berhak menggunakan bot ini.")
-                                continue
-
-                            if teks == "/start":
-                                kirim_pesan(chat_id, """👋 Halo! Bot siap membantu memperbarui status laporan jalan.
-
-Gunakan perintah:
-`/update <nomor_laporan>`
-
-Contoh:
-`/update 15`
-""")
-                            elif teks == "/status":
-                                kirim_pesan(chat_id, """📋 Panduan Penggunaan:
-Ketik `/update <nomor_laporan>` → pilih tombol status → selesai.
-""")
-                            elif teks.startswith("/update "):
-                                nomor = teks.replace("/update ", "").strip()
-                                if not nomor.isdigit():
-                                    kirim_pesan(chat_id, "⚠️ Format salah!\nGunakan: `/update 5`")
-                                    continue
-                                tombol = {"inline_keyboard": [[{"text": s, "callback_data": f"set|{nomor}|{s}"}] for s in DAFTAR_STATUS]}
-                                kirim_pesan(chat_id, f"🔧 Pilih status untuk Laporan No. `{nomor}`:", tombol)
-                            else:
-                                kirim_pesan(chat_id, "Gunakan `/start` atau `/update <nomor>` ya.")
-
-                        elif "callback_query" in upd:
-                            cb = upd["callback_query"]
-                            chat_id = cb["message"]["chat"]["id"]
-                            pesan_id = cb["message"]["message_id"]
-                            data_aksi = cb["data"]
-                            print(f"🔘 Klik tombol dari {chat_id}: {data_aksi}")
-
-                            if chat_id not in IZIN_CHAT_ID or not data_aksi.startswith("set|"):
-                                requests.post(f"{URL_API}/answerCallbackQuery", data={"callback_query_id": cb["id"]})
-                                continue
-
-                            _, nomor, status = data_aksi.split("|", 2)
-                            berhasil = update_status(nomor, status)
-                            teks_hasil = f"✅ Berhasil diperbarui!\n📌 Laporan: `{nomor}`\n📊 Status: {status}" if berhasil else f"❌ Gagal!\nLaporan `{nomor}` tidak ada di daftar."
-                            
-                            requests.post(
-                                f"{URL_API}/editMessageText",
-                                data={"chat_id": chat_id, "message_id": pesan_id, "text": teks_hasil, "parse_mode": "Markdown"}
-                            )
-                            requests.post(f"{URL_API}/answerCallbackQuery", data={"callback_query_id": cb["id"], "text": "✅ Selesai" if berhasil else "❌ Gagal"})
-
-                time.sleep(1)
-            except Exception as e:
-                print(f"⚠️ Error loop bot: {e} — coba lagi dalam 3 detik")
-                time.sleep(3)
-    except Exception as e:
-        print(f"❌ BOT GAGAL BERJALAN: {e}")
-        print("Kesalahan fatal:", sys.exc_info())
-
-if "bot_berjalan" not in st.session_state:
-    st.session_state["bot_berjalan"] = True
-    print("🔄 Menjalankan thread bot...")
-    thread = threading.Thread(target=jalankan_bot, daemon=False)
-    thread.start()
-else:
-    print("ℹ️ Bot sudah berjalan sebelumnya.")
