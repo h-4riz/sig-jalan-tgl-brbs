@@ -71,6 +71,8 @@ if "kamera_aktif" not in st.session_state:
     st.session_state["kamera_aktif"] = False
 if "bot_berjalan" not in st.session_state:
     st.session_state["bot_berjalan"] = False
+if "foto_popup_url" not in st.session_state:
+    st.session_state["foto_popup_url"] = None
 
 # --------------------------
 # FUNGSI UTAMA APLIKASI
@@ -273,6 +275,35 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.2rem !important; font-weight: 700 !important; }
     
     header, #MainMenu, footer, [data-testid="stSidebar"] { visibility: hidden; }
+    
+    /* === POPUP FOTO === */
+    .popup-overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0,0,0,0.75);
+        z-index: 999990;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .popup-box {
+        background: white;
+        border-radius: 16px;
+        padding: 1.2rem;
+        max-width: 90%;
+        max-height: 90vh;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+    }
+    .popup-box img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 10px;
+    }
+    .popup-tombol-tutup {
+        margin-top: 1rem;
+        text-align: right;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -480,7 +511,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# HALAMAN RIWAYAT & STATUS
+# HALAMAN RIWAYAT & STATUS ✅ DIPERBARUI
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -488,6 +519,26 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         st.rerun()
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
+
+    # === POPUP FOTO ===
+    if st.session_state.get("foto_popup_url"):
+        foto_url = st.session_state["foto_popup_url"]
+        no_lap = st.session_state.get("foto_popup_no", "")
+        st.markdown(f"""
+        <div class="popup-overlay">
+            <div class="popup-box">
+                <h4 style="color:#023e8a; margin-bottom:0.5rem;">📷 Foto Laporan No. {no_lap}</h4>
+                <img src="{foto_url}" alt="Foto Laporan" />
+                <div class="popup-tombol-tutup">
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("✕ Tutup Foto", type="primary"):
+            st.session_state["foto_popup_url"] = None
+            st.session_state["foto_popup_no"] = None
+            st.rerun()
+        st.markdown("---")
 
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
@@ -508,14 +559,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan["No Urut"] = df_laporan["No Urut"].astype("Int64")
                 df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
 
-            kolom_tampil = [
-                "No Urut", "Waktu", "Ruas", "No_Ruas", "KM", 
-                "Jenis_Masalah", "Keterangan", "Status", 
-                "Terakhir_Diperbarui", "Link_Maps", "Foto_URL"
-            ]
-            kolom_tersedia = [k for k in kolom_tampil if k in df_laporan.columns]
-            df_laporan = df_laporan[kolom_tersedia]
-
+            # Terapkan Filter
             if filter_status != "Semua":
                 df_laporan = df_laporan[df_laporan["Status"] == filter_status]
             if filter_ruas != "Semua":
@@ -524,40 +568,46 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
             if not df_laporan.empty:
+                # === TABEL HANYA 4 KOLOM ===
+                tampil = []
+                for _, row in df_laporan.iterrows():
+                    no_urut = row.get("No Urut", "-")
+                    foto_url = str(row.get("Foto_URL", "")).strip()
+                    status = str(row.get("Status", "-"))
+
+                    # Tombol Lihat Foto → simpan ke session state
+                    if foto_url and foto_url.startswith("https://"):
+                        if st.button(f"📷 Lihat Foto", key=f"foto_{no_urut}"):
+                            st.session_state["foto_popup_url"] = foto_url
+                            st.session_state["foto_popup_no"] = no_urut
+                            st.rerun()
+                        kolom_status = f"{status} | [Lihat Foto]"
+                    else:
+                        kolom_status = f"{status} | —"
+
+                    tampil.append({
+                        "Nomor": no_urut,
+                        "Waktu": row.get("Waktu", "-"),
+                        "Ruas": row.get("Ruas", "-"),
+                        "Status Laporan": kolom_status
+                    })
+
+                df_tampil = pd.DataFrame(tampil)
                 st.dataframe(
-                    df_laporan.drop(columns=["Foto_URL"], errors="ignore"),
+                    df_tampil,
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-                        "No Urut": st.column_config.NumberColumn("No Laporan", width="small"),
+                        "Nomor": st.column_config.NumberColumn("No", width="small"),
                         "Waktu": st.column_config.TextColumn("Waktu Lapor", width="medium"),
                         "Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
-                        "No_Ruas": st.column_config.TextColumn("No Ruas", width="small"),
-                        "KM": st.column_config.TextColumn("Titik KM", width="small"),
-                        "Jenis_Masalah": st.column_config.TextColumn("Jenis Masalah", width="medium"),
-                        "Keterangan": st.column_config.TextColumn("Keterangan", width="large"),
-                        "Status": st.column_config.TextColumn("Status Penanganan", width="medium"),
-                        "Terakhir_Diperbarui": st.column_config.TextColumn("Diperbarui Pada", width="medium"),
-                        "Link_Maps": st.column_config.LinkColumn("Lihat Lokasi", display_text="Buka Peta", width="medium")
+                        "Status Laporan": st.column_config.TextColumn("Status Laporan", width="medium")
                     }
                 )
 
-                st.markdown("---")
-                st.subheader("🖼️ Tampilan Foto Laporan")
+                st.info("💡 Klik tombol 📷 Lihat Foto untuk membuka foto dalam tampilan di atas tabel")
 
-                daftar_no = ["Pilih nomor laporan..."] + df_laporan["No Urut"].astype(str).tolist()
-                pilihan_no = st.selectbox("Pilih nomor laporan untuk melihat fotonya:", options=daftar_no)
-
-                if pilihan_no != "Pilih nomor laporan...":
-                    baris_pilih = df_laporan[df_laporan["No Urut"].astype(str) == pilihan_no]
-                    if not baris_pilih.empty:
-                        foto_url = baris_pilih.iloc[0].get("Foto_URL", "").strip()
-                        if foto_url and foto_url.startswith("https://"):
-                            st.image(foto_url, caption=f"Foto Laporan No {pilihan_no}", use_column_width=True)
-                        else:
-                            st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
-
-                csv = df_laporan.drop(columns=["Foto_URL"], errors="ignore").to_csv(index=False).encode("utf-8")
+                csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
                     label="📥 Unduh Data Laporan (CSV)",
                     data=csv,
@@ -573,8 +623,9 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         st.error(f"⚠️ Gagal memuat data: {str(e)}")
         if st.session_state["daftar_laporan"]:
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
+
 # --------------------------
-# 🤖 BOT TELEGRAM VERSI TERPISAH (PASTI BERJALAN)
+# 🤖 BOT TELEGRAM VERSI TERPISAH
 # --------------------------
 import sys
 
@@ -592,7 +643,6 @@ def jalankan_bot():
         ]
         URL_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-        # WAJIB: Bersihkan pesan yang terjebak SEKALI saat mulai
         print("🧹 Membersihkan update lama yang terjebak...")
         bersihkan = requests.get(f"{URL_API}/getUpdates?offset=-1", timeout=10).json()
         print(f"✅ Bersihkan selesai: {bersihkan}")
@@ -647,19 +697,16 @@ def jalankan_bot():
                         offset = upd["update_id"] + 1
                         print(f"\n📩 UPDATE BARU DITERIMA: {upd}")
 
-                        # === PROSES PERINTAH PESAN ===
                         if "message" in upd:
                             pesan = upd["message"]
                             chat_id = pesan["chat"]["id"]
                             teks = pesan.get("text", "").strip()
                             print(f"✉️ Pesan dari {chat_id}: {teks}")
 
-                            # Cek izin
                             if chat_id not in IZIN_CHAT_ID:
                                 kirim_pesan(chat_id, "⛔ Maaf, Anda tidak berhak menggunakan bot ini.")
                                 continue
 
-                            # Respon perintah
                             if teks == "/start":
                                 kirim_pesan(chat_id, """👋 Halo! Bot siap membantu memperbarui status laporan jalan.
 
@@ -683,7 +730,6 @@ Ketik `/update <nomor_laporan>` → pilih tombol status → selesai.
                             else:
                                 kirim_pesan(chat_id, "Gunakan `/start` atau `/update <nomor>` ya.")
 
-                        # === PROSES KLIK TOMBOL ===
                         elif "callback_query" in upd:
                             cb = upd["callback_query"]
                             chat_id = cb["message"]["chat"]["id"]
@@ -713,25 +759,10 @@ Ketik `/update <nomor_laporan>` → pilih tombol status → selesai.
         print(f"❌ BOT GAGAL BERJALAN: {e}")
         print("Kesalahan fatal:", sys.exc_info())
 
-# Jalankan bot dengan cara yang pasti berjalan di Streamlit
 if "bot_berjalan" not in st.session_state:
     st.session_state["bot_berjalan"] = True
     print("🔄 Menjalankan thread bot...")
-    thread = threading.Thread(target=jalankan_bot, daemon=False)  # JANGAN pakai daemon=True!
+    thread = threading.Thread(target=jalankan_bot, daemon=False)
     thread.start()
 else:
     print("ℹ️ Bot sudah berjalan sebelumnya.")
-
-# TAMBAHKAN BARIS INI DI PALING ATAS
-import streamlit as st
-import requests
-import json
-import datetime
-import gspread
-from google.oauth2.service_account import Credentials
-
-# Kemudian tulis token dengan benar:
-TELEGRAM_TOKEN = "8016748185:AAF6ynm16h2ea1-674Q1EfBQtRnArlZSP_U"
-
-# Atau jika ingin tetap pakai secrets:
-# TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
