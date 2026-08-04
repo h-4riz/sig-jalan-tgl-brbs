@@ -640,26 +640,33 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 )
 
                 # === KLIK BUKA FOTO — TIDAK BERKEDIP ===
-                if event.selection and event.selection.get("rows"):
-                    idx_dipilih = event.selection["rows"][0]
-                    no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
-                    foto_url = foto_map.get(no_dipilih, "")
+               if event.selection and event.selection.get("rows"):
+    idx_dipilih = event.selection["rows"][0]
+    no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
+    foto_url = foto_map.get(no_dipilih, "")
 
-                    if foto_url and foto_url.startswith("https://"):
-                        nomor_saat_ini = st.session_state.get("foto_popup_no", "")
-                        if nomor_saat_ini != no_dipilih:
-                            st.session_state["foto_popup_url"] = foto_url
-                            st.session_state["foto_popup_no"] = no_dipilih
-                            st.rerun()
-                    else:
-                        st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
-                else:
-                    if st.session_state.get("foto_popup_url"):
-                        st.session_state["foto_popup_url"] = None
-                        st.session_state["foto_popup_no"] = None
-                        st.rerun()
+    # ✅ Jika diklik YANG SAMA → TUTUP FOTO
+    nomor_saat_ini = st.session_state.get("foto_popup_no", "")
+    if nomor_saat_ini == no_dipilih:
+        # Klik baris yang sama = TUTUP
+        st.session_state["foto_popup_url"] = None
+        st.session_state["foto_popup_no"] = None
+        st.rerun()
+    elif foto_url and foto_url.startswith("https://"):
+        # Klik baris baru = BUKA FOTO
+        st.session_state["foto_popup_url"] = foto_url
+        st.session_state["foto_popup_no"] = no_dipilih
+        st.rerun()
+    else:
+        st.info("ℹ️ Foto belum tersedia")
+else:
+    # Tidak ada pilihan = TUTUP
+    if st.session_state.get("foto_popup_url"):
+        st.session_state["foto_popup_url"] = None
+        st.session_state["foto_popup_no"] = None
+        st.rerun()
 
-                st.caption("💡 Klik baris untuk lihat foto | Klik tombol TUTUP di atas untuk menutup")
+st.caption("💡 BUKA = Klik baris | TUTUP = Klik baris yang sama sekali lagi")
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
