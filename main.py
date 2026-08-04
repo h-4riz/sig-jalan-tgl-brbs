@@ -640,7 +640,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 )
 
                 # === KLIK BUKA FOTO — TIDAK BERKEDIP ===
-               if event.selection and event.selection.get("rows"):
+    if event.selection and event.selection.get("rows"):
     idx_dipilih = event.selection["rows"][0]
     no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
     foto_url = foto_map.get(no_dipilih, "")
