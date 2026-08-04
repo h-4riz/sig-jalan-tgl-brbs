@@ -511,7 +511,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# HALAMAN RIWAYAT & STATUS ✅ CACHING
+# HALAMAN RIWAYAT & STATUS ✅ POPUP AMAN + TIDAK BERKEDIP
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -520,7 +520,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # === POPUP FOTO ===
+    # === POPUP FOTO DI ATAS TABEL ===
     if st.session_state.get("foto_popup_url"):
         foto_url = st.session_state.get("foto_popup_url", "")
         no_lap = st.session_state.get("foto_popup_no", "")
@@ -544,7 +544,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
     # === PENGATURAN CACHE DATA ===
-    CACHE_DALAM_DETIK = 60  # Data diambil ulang dari Google Sheets setiap 60 detik saja
+    CACHE_DALAM_DETIK = 60
     df_laporan = pd.DataFrame()
 
     try:
@@ -552,45 +552,37 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             waktu_sekarang = datetime.datetime.now()
             perlu_muat_ulang = True
 
-            # Cek apakah data masih dalam masa cache
             if ("data_sheet_cache" in st.session_state and 
                 "waktu_muat_data" in st.session_state):
                 selisih = (waktu_sekarang - st.session_state["waktu_muat_data"]).total_seconds()
                 if selisih < CACHE_DALAM_DETIK:
-                    perlu_muat_ulang = False  # Pakai data cache dulu
+                    perlu_muat_ulang = False
 
             if perlu_muat_ulang:
-                # === AMBIL DATA BARU DARI GOOGLE SHEETS ===
                 try:
                     data = sheet.get_all_records()
                     st.session_state["data_sheet_cache"] = data
                     st.session_state["waktu_muat_data"] = waktu_sekarang
-                    st.info("✅ Data diperbarui dari server")
                 except Exception as api_err:
                     pesan_error = str(api_err)
                     if "Quota exceeded" in pesan_error or "429" in pesan_error:
                         st.warning("""
-                        ⏳ **Terlalu banyak akses data ke Google Sheets.**
-                        
-                        Mohon tunggu **1–2 menit** lalu coba lagi. 
+                        ⏳ Terlalu banyak akses data. Tunggu 1–2 menit lalu coba lagi.
                         Saat ini tampil menggunakan data yang tersimpan terakhir.
                         """)
-                        # Pakai data lama dari cache jika ada
                         data = st.session_state.get("data_sheet_cache", [])
                     else:
                         st.error(f"⚠️ Gagal memuat data: {pesan_error}")
                         data = st.session_state.get("data_sheet_cache", [])
             else:
-                # === PAKAI DATA DARI CACHE ===
                 data = st.session_state["data_sheet_cache"]
 
             df_laporan = pd.DataFrame(data)
 
         else:
-            # Jika tidak ada koneksi Google Sheets → pakai data lokal
             df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
 
-        # === LANJUT PEMROSESAN DATA ===
+        # === PROSES DATA ===
         if not df_laporan.empty:
             if "No Urut" in df_laporan.columns:
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
@@ -598,7 +590,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan["No Urut"] = df_laporan["No Urut"].astype("Int64")
                 df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
 
-            # Terapkan Filter
             if filter_status != "Semua":
                 df_laporan = df_laporan[df_laporan["Status"] == filter_status]
             if filter_ruas != "Semua":
@@ -607,7 +598,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
             if not df_laporan.empty:
-                # === TABEL + KLIK BUKA FOTO ===
+                # === SIAPKAN TABEL ===
                 foto_map = {}
                 data_tabel = []
                 for _, row in df_laporan.iterrows():
@@ -639,18 +630,29 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     }
                 )
 
+                # === 🔑 BAGIAN KLIK BUKA FOTO — TIDAK BERKEDIP ===
                 if event.selection and event.selection.get("rows"):
                     idx_dipilih = event.selection["rows"][0]
                     no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
                     foto_url = foto_map.get(no_dipilih, "")
+
                     if foto_url and foto_url.startswith("https://"):
-                        st.session_state["foto_popup_url"] = foto_url
-                        st.session_state["foto_popup_no"] = no_dipilih
-                        st.rerun()
+                        nomor_saat_ini = st.session_state.get("foto_popup_no", "")
+                        # HANYA simpan & rerun JIKA nomornya BERBEDA
+                        if nomor_saat_ini != no_dipilih:
+                            st.session_state["foto_popup_url"] = foto_url
+                            st.session_state["foto_popup_no"] = no_dipilih
+                            st.rerun()
                     else:
                         st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
+                else:
+                    # Tidak ada baris dipilih → tutup foto
+                    if st.session_state.get("foto_popup_url"):
+                        st.session_state["foto_popup_url"] = None
+                        st.session_state["foto_popup_no"] = None
+                        st.rerun()
 
-                st.caption("💡 Klik salah satu baris untuk melihat foto laporan")
+                st.caption("💡 Klik baris untuk lihat foto | Klik di luar tabel untuk tutup")
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
