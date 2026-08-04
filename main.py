@@ -581,7 +581,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
         else:
             df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
-    # === POPUP FOTO — DIPERBAIKI: BISA DITUTUP & AMAN ===
+                # === POPUP FOTO — DIPERBAIKI: BISA DITUTUP & AMAN ===
     if st.session_state.get("foto_popup_url"):
         foto_url = st.session_state.get("foto_popup_url", "")
         no_lap = st.session_state.get("foto_popup_no", "")
