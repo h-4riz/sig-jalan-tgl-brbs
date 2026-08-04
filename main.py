@@ -511,7 +511,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# HALAMAN RIWAYAT & STATUS 
+# HALAMAN RIWAYAT & STATUS ✅ CACHING
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -522,8 +522,8 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     # === POPUP FOTO ===
     if st.session_state.get("foto_popup_url"):
-        foto_url = st.session_state["foto_popup_url"]
-        no_lap = st.session_state.get("foto_popup_no", "")  # ✅ Sudah diperbaiki!
+        foto_url = st.session_state.get("foto_popup_url", "")
+        no_lap = st.session_state.get("foto_popup_no", "")
         st.markdown(f"""
         <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center;">
             <div style="background:white; border-radius:16px; padding:1.5rem; max-width:90%; max-height:90vh; box-shadow:0 10px 40px rgba(0,0,0,0.35);">
@@ -543,13 +543,54 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
+    # === PENGATURAN CACHE DATA ===
+    CACHE_DALAM_DETIK = 60  # Data diambil ulang dari Google Sheets setiap 60 detik saja
+    df_laporan = pd.DataFrame()
+
     try:
         if sheet:
-            data = sheet.get_all_records()
-            df_laporan = pd.DataFrame(data)
-        else:
-            df_laporan = pd.DataFrame(st.session_state["daftar_laporan"])
+            waktu_sekarang = datetime.datetime.now()
+            perlu_muat_ulang = True
 
+            # Cek apakah data masih dalam masa cache
+            if ("data_sheet_cache" in st.session_state and 
+                "waktu_muat_data" in st.session_state):
+                selisih = (waktu_sekarang - st.session_state["waktu_muat_data"]).total_seconds()
+                if selisih < CACHE_DALAM_DETIK:
+                    perlu_muat_ulang = False  # Pakai data cache dulu
+
+            if perlu_muat_ulang:
+                # === AMBIL DATA BARU DARI GOOGLE SHEETS ===
+                try:
+                    data = sheet.get_all_records()
+                    st.session_state["data_sheet_cache"] = data
+                    st.session_state["waktu_muat_data"] = waktu_sekarang
+                    st.info("✅ Data diperbarui dari server")
+                except Exception as api_err:
+                    pesan_error = str(api_err)
+                    if "Quota exceeded" in pesan_error or "429" in pesan_error:
+                        st.warning("""
+                        ⏳ **Terlalu banyak akses data ke Google Sheets.**
+                        
+                        Mohon tunggu **1–2 menit** lalu coba lagi. 
+                        Saat ini tampil menggunakan data yang tersimpan terakhir.
+                        """)
+                        # Pakai data lama dari cache jika ada
+                        data = st.session_state.get("data_sheet_cache", [])
+                    else:
+                        st.error(f"⚠️ Gagal memuat data: {pesan_error}")
+                        data = st.session_state.get("data_sheet_cache", [])
+            else:
+                # === PAKAI DATA DARI CACHE ===
+                data = st.session_state["data_sheet_cache"]
+
+            df_laporan = pd.DataFrame(data)
+
+        else:
+            # Jika tidak ada koneksi Google Sheets → pakai data lokal
+            df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
+
+        # === LANJUT PEMROSESAN DATA ===
         if not df_laporan.empty:
             if "No Urut" in df_laporan.columns:
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
@@ -566,7 +607,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
             if not df_laporan.empty:
-                # === TABEL 4 KOLOM + FOTO BERFUNGSI ===
+                # === TABEL + KLIK BUKA FOTO ===
                 foto_map = {}
                 data_tabel = []
                 for _, row in df_laporan.iterrows():
@@ -583,7 +624,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
                 df_tampil = pd.DataFrame(data_tabel)
 
-                # Tampilkan tabel — klik baris untuk lihat foto
                 event = st.dataframe(
                     df_tampil,
                     use_container_width=True,
@@ -599,7 +639,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     }
                 )
 
-                # Saat baris diklik → tampilkan foto
                 if event.selection and event.selection.get("rows"):
                     idx_dipilih = event.selection["rows"][0]
                     no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
@@ -611,7 +650,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     else:
                         st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
 
-                st.caption("💡 Klik pada salah satu baris tabel untuk melihat foto laporan")
+                st.caption("💡 Klik salah satu baris untuk melihat foto laporan")
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
@@ -625,7 +664,8 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 st.info("ℹ️ Tidak ada laporan yang sesuai dengan filter.")
         else:
             st.info("ℹ️ Belum ada laporan yang dikirim.")
+
     except Exception as e:
-        st.error(f"⚠️ Gagal memuat data: {str(e)}")
-        if st.session_state["daftar_laporan"]:
+        st.error(f"⚠️ Terjadi kesalahan: {str(e)}")
+        if st.session_state.get("daftar_laporan"):
             st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
