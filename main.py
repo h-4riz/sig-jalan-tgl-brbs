@@ -511,7 +511,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# HALAMAN RIWAYAT & STATUS ✅ DIPERBAIKI
+# HALAMAN RIWAYAT & STATUS ✅ FINAL
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -520,7 +520,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # === POPUP FOTO ===
+    # === POPUP FOTO DI ATAS TABEL ===
     if st.session_state.get("foto_popup_url"):
         foto_url = st.session_state["foto_popup_url"]
         no_lap = st.session_state.get("foto_popup_no", "")
@@ -566,80 +566,63 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
             if not df_laporan.empty:
-                # === TABEL HANYA 4 KOLOM ===
+                # === TABEL HANYA 4 KOLOM + TOMBOL FOTO BERFUNGSI ===
                 st.markdown("""
                 <style>
-                .foto-link {
+                .stButton button {
+                    padding: 0.15rem 0.5rem;
+                    font-size: 0.85rem;
+                    line-height: 1.2;
+                    border-radius: 6px;
+                    background: rgba(251, 191, 36, 0.15);
                     color: #fbbf24;
-                    text-decoration: none;
-                    cursor: pointer;
-                    font-weight: 600;
+                    border: 1px solid #fbbf24;
                 }
-                .foto-link:hover {
-                    text-decoration: underline;
+                .stButton button:hover {
+                    background: rgba(251, 191, 36, 0.3);
+                    color: #fff;
                 }
                 </style>
                 """, unsafe_allow_html=True)
 
-                # Siapkan data tabel
-                daftar_tampil = []
-                daftar_foto = {}  # simpan foto_url untuk setiap nomor
+                # Tampilkan tabel sebagai daftar baris agar tombol bisa diklik
+                st.markdown("""
+                <style>
+                table { width: 100%; border-collapse: collapse; }
+                th { background: rgba(251,191,36,0.2); color: #fbbf24; padding: 0.75rem; text-align: left; font-weight: 700; }
+                td { padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.1); vertical-align: middle; }
+                </style>
+                <table>
+                    <tr><th style="width:80px;">No</th><th style="width:180px;">Waktu Lapor</th><th>Nama Ruas</th><th style="width:280px;">Status Laporan</th></tr>
+                """, unsafe_allow_html=True)
 
                 for _, row in df_laporan.iterrows():
                     no_urut = row.get("No Urut", "-")
                     foto_url = str(row.get("Foto_URL", "")).strip()
                     status = str(row.get("Status", "-"))
+                    waktu = row.get("Waktu", "-")
+                    ruas = row.get("Ruas", "-")
 
-                    daftar_foto[str(no_urut)] = foto_url
-
-                    # Tampilkan status + tautan foto dalam satu teks
+                    # Buat tombol Lihat Foto yang BERFUNGSI
                     if foto_url and foto_url.startswith("https://"):
-                        kolom_status = f"{status}  |  📷 Lihat Foto"
-                    else:
-                        kolom_status = f"{status}"
-
-                    daftar_tampil.append({
-                        "No": no_urut,
-                        "Waktu Lapor": row.get("Waktu", "-"),
-                        "Nama Ruas": row.get("Ruas", "-"),
-                        "Status Laporan": kolom_status
-                    })
-
-                df_tampil = pd.DataFrame(daftar_tampil)
-
-                # Tampilkan tabel
-                st.dataframe(
-                    df_tampil,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "No": st.column_config.NumberColumn("No", width="small"),
-                        "Waktu Lapor": st.column_config.TextColumn("Waktu Lapor", width="medium"),
-                        "Nama Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
-                        "Status Laporan": st.column_config.TextColumn("Status Laporan", width="medium")
-                    }
-                )
-
-                # === PILIHAN NOMOR LAPORAN UNTUK BUKA FOTO ===
-                daftar_no = ["Pilih nomor laporan..."] + [str(x) for x in df_tampil["No"].tolist()]
-                pilihan_no = st.selectbox("📷 Lihat foto laporan nomor:", options=daftar_no)
-
-                if pilihan_no != "Pilih nomor laporan...":
-                    foto_url = daftar_foto.get(pilihan_no, "")
-                    if foto_url and foto_url.startswith("https://"):
-                        st.markdown(f"""
-                        <div class="popup-overlay">
-                            <div class="popup-box">
-                                <h4 style="color:#023e8a; margin-bottom:0.5rem;">📷 Foto Laporan No. {pilihan_no}</h4>
-                                <img src="{foto_url}" alt="Foto Laporan" />
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        if st.button("✕ Tutup Foto"):
-                            st.session_state["foto_popup_url"] = None
+                        if st.button(f"📷 Lihat Foto — {no_urut}", key=f"foto_{no_urut}"):
+                            st.session_state["foto_popup_url"] = foto_url
+                            st.session_state["foto_popup_no"] = no_urut
                             st.rerun()
+                        tombol_html = f'<br/>📷 <span style="color:#fbbf24; font-weight:600;">Klik tombol di atas untuk lihat foto</span>'
                     else:
-                        st.info("ℹ️ Foto belum tersedia.")
+                        tombol_html = ""
+
+                    st.markdown(f"""
+                    <tr>
+                        <td><b>{no_urut}</b></td>
+                        <td>{waktu}</td>
+                        <td>{ruas}</td>
+                        <td>{status} {tombol_html}</td>
+                    </tr>
+                    """, unsafe_allow_html=True)
+
+                st.markdown("</table>", unsafe_allow_html=True)
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
