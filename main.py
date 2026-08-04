@@ -513,6 +513,9 @@ elif st.session_state["halaman_aktif"] == "lapor":
 # --------------------------
 # HALAMAN RIWAYAT & STATUS 
 # --------------------------
+# --------------------------
+# HALAMAN RIWAYAT & STATUS 
+# --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
         st.session_state["halaman_aktif"] = "beranda"
@@ -521,39 +524,31 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
     # ==============================================
-    # ✅ POPUP FOTO DILETAKKAN DI SINI — LUAR TRY
+    # ✅ FUNGSI MODAL POPUP NATIVE STREAMLIT
     # ==============================================
-    if st.session_state.get("foto_popup_url"):
-        foto_url = st.session_state.get("foto_popup_url", "")
+    @st.dialog("📷 Detail Foto Laporan")
+    def tampilkan_popup_foto():
         no_lap = st.session_state.get("foto_popup_no", "")
+        foto_url = st.session_state.get("foto_popup_url", "")
+        
+        st.subheader(f"Laporan No. {no_lap}")
+        if foto_url:
+            st.image(foto_url, use_column_width=True)
+        else:
+            st.error("⚠️ URL Foto tidak valid/tidak dapat diakses.")
+            
+        st.write("")
+        if st.button("✕ Tutup Foto", type="primary", use_container_width=True):
+            st.session_state["foto_popup_url"] = None
+            st.session_state["foto_popup_no"] = None
+            st.rerun()
 
-        st.markdown(f"""
-        <div style="position:fixed; top:0; left:0; width:100%; height:100%; 
-            background:rgba(0,0,0,0.85); z-index:99999; 
-            display:flex; align-items:center; justify-content:center;">
-            <div style="background:white; border-radius:16px; padding:1.5rem; max-width:90%; max-height:85vh; 
-                box-shadow:0 10px 40px rgba(0,0,0,0.35); position:relative;">
-                <h4 style="color:#023e8a; margin:0 0 1rem 0;">📷 Foto Laporan No. {no_lap}</h4>
-                <img src="{foto_url}" alt="Foto Laporan" 
-                    style="max-width:100%; max-height:70vh; width:auto; height:auto; border-radius:10px;"
-                    onerror="this.parentElement.innerHTML+='<p style=\\'color:red; margin-top:1rem;\\'>⚠️ Foto tidak dapat dimuat (URL tidak valid/tidak dapat diakses)</p>'" />
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Tombol Tutup — SELALU BISA DIKLIK
-        col_tutup, _ = st.columns([1, 8])
-        with col_tutup:
-            if st.button("✕ Tutup Foto", type="primary", use_container_width=True):
-                st.session_state["foto_popup_url"] = None
-                st.session_state["foto_popup_no"] = None
-                st.rerun()
-
-        st.markdown("---")
-        st.caption("💡 Klik tombol di atas untuk menutup foto")
+    # Panggil popup jika session_state terisi
+    if st.session_state.get("foto_popup_url"):
+        tampilkan_popup_foto()
 
     # ==============================================
-    # ✅ BARIS FILTER — SETELAH POPUP
+    # ✅ BARIS FILTER
     # ==============================================
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
@@ -561,7 +556,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
     # ==============================================
-    # ✅ BARU MASUK KE BLOK TRY
+    # ✅ BLOK TRY & DATAFRAME
     # ==============================================
     CACHE_DALAM_DETIK = 60
     df_laporan = pd.DataFrame()
@@ -644,11 +639,11 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                         "Waktu Lapor": st.column_config.TextColumn("Waktu Lapor", width="medium"),
                         "Nama Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
                         "Status Laporan": st.column_config.TextColumn("Status Laporan", width="medium"),
-                        "📷 Foto": st.column_config.TextColumn("Lihat Foto", width="small")
+                        "📷 Foto": "Lihat Foto"
                     }
                 )
 
-                # === KLIK BUKA FOTO — TIDAK BERKEDIP ===
+                # === KLIK BUKA FOTO ===
                 if event.selection and event.selection.get("rows"):
                     idx_dipilih = event.selection["rows"][0]
                     no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
@@ -662,13 +657,8 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                             st.rerun()
                     else:
                         st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
-                else:
-                    if st.session_state.get("foto_popup_url"):
-                        st.session_state["foto_popup_url"] = None
-                        st.session_state["foto_popup_no"] = None
-                        st.rerun()
 
-                st.caption("💡 Klik baris untuk lihat foto | Klik tombol Tutup untuk menutup")
+                st.caption("💡 Klik baris tabel untuk melihat foto laporan.")
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
