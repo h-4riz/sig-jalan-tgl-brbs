@@ -521,40 +521,28 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
     # === POPUP FOTO DI ATAS TABEL ===
-    # === POPUP FOTO — DIPERBAIKI: BISA DITUTUP & AMAN ===
     if st.session_state.get("foto_popup_url"):
         foto_url = st.session_state.get("foto_popup_url", "")
         no_lap = st.session_state.get("foto_popup_no", "")
-
         st.markdown(f"""
-        <div id="popup-foto" style="position:fixed; top:0; left:0; width:100%; height:100%; 
-            background:rgba(0,0,0,0.85); z-index:99999; 
-            display:flex; align-items:center; justify-content:center;
-            cursor:pointer;"
-            onclick="if(event.target === this) window.stClosePopup()">
-            <div style="background:white; border-radius:16px; padding:1.5rem; max-width:90%; max-height:85vh; 
-                box-shadow:0 10px 40px rgba(0,0,0,0.35); position:relative;">
-                <h4 style="color:#023e8a; margin:0 0 1rem 0; display:flex; align-items:center; gap:0.5rem;">
-                    📷 Foto Laporan No. {no_lap}
-                </h4>
-                <img src="{foto_url}" alt="Foto Laporan" 
-                    style="max-width:100%; max-height:70vh; width:auto; height:auto; border-radius:10px; 
-                        object-fit:contain;"
-                    onerror="this.parentElement.innerHTML='<p style=\\'color:red; padding:1rem;\\'>⚠️ Foto tidak dapat dimuat. URL tidak valid atau tidak dapat diakses.</p>'" />
+        <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center;">
+            <div style="background:white; border-radius:16px; padding:1.5rem; max-width:90%; max-height:90vh; box-shadow:0 10px 40px rgba(0,0,0,0.35);">
+                <h4 style="color:#023e8a; margin-bottom:1rem;">📷 Foto Laporan No. {no_lap}</h4>
+                <img src="{foto_url}" alt="Foto Laporan" style="max-width:100%; height:auto; border-radius:10px;" />
             </div>
         </div>
         """, unsafe_allow_html=True)
-
-        # Tombol Tutup Foto — di luar popup agar selalu bisa diklik
-        col_tutup, col_spasi = st.columns([1, 8])
-        with col_tutup:
-            if st.button("✕ Tutup Foto", type="primary", use_container_width=True):
-                st.session_state["foto_popup_url"] = None
-                st.session_state["foto_popup_no"] = None
-                st.rerun()
-
+        if st.button("✕ Tutup Foto", type="primary"):
+            st.session_state["foto_popup_url"] = None
+            st.session_state["foto_popup_no"] = None
+            st.rerun()
         st.markdown("---")
-        st.caption("💡 Klik tombol di atas atau klik latar belakang gelap untuk menutup")
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
+    with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
+    with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
+
     # === PENGATURAN CACHE DATA ===
     CACHE_DALAM_DETIK = 60
     df_laporan = pd.DataFrame()
@@ -593,7 +581,40 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
         else:
             df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
+    # === POPUP FOTO — DIPERBAIKI: BISA DITUTUP & AMAN ===
+    if st.session_state.get("foto_popup_url"):
+        foto_url = st.session_state.get("foto_popup_url", "")
+        no_lap = st.session_state.get("foto_popup_no", "")
 
+        st.markdown(f"""
+        <div id="popup-foto" style="position:fixed; top:0; left:0; width:100%; height:100%; 
+            background:rgba(0,0,0,0.85); z-index:99999; 
+            display:flex; align-items:center; justify-content:center;
+            cursor:pointer;"
+            onclick="if(event.target === this) window.stClosePopup()">
+            <div style="background:white; border-radius:16px; padding:1.5rem; max-width:90%; max-height:85vh; 
+                box-shadow:0 10px 40px rgba(0,0,0,0.35); position:relative;">
+                <h4 style="color:#023e8a; margin:0 0 1rem 0; display:flex; align-items:center; gap:0.5rem;">
+                    📷 Foto Laporan No. {no_lap}
+                </h4>
+                <img src="{foto_url}" alt="Foto Laporan" 
+                    style="max-width:100%; max-height:70vh; width:auto; height:auto; border-radius:10px; 
+                        object-fit:contain;"
+                    onerror="this.parentElement.innerHTML='<p style=\\'color:red; padding:1rem;\\'>⚠️ Foto tidak dapat dimuat. URL tidak valid atau tidak dapat diakses.</p>'" />
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Tombol Tutup Foto — di luar popup agar selalu bisa diklik
+        col_tutup, col_spasi = st.columns([1, 8])
+        with col_tutup:
+            if st.button("✕ Tutup Foto", type="primary", use_container_width=True):
+                st.session_state["foto_popup_url"] = None
+                st.session_state["foto_popup_no"] = None
+                st.rerun()
+
+        st.markdown("---")
+        st.caption("💡 Klik tombol di atas atau klik latar belakang gelap untuk menutup")
         # === PROSES DATA ===
         if not df_laporan.empty:
             if "No Urut" in df_laporan.columns:
