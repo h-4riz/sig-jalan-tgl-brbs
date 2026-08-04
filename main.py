@@ -511,7 +511,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# HALAMAN RIWAYAT & STATUS
+# HALAMAN RIWAYAT & STATUS 
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -523,7 +523,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     # === POPUP FOTO ===
     if st.session_state.get("foto_popup_url"):
         foto_url = st.session_state["foto_popup_url"]
-        no_lap = st.session_state["foto_popup_no", ""]
+        no_lap = st.session_state.get("foto_popup_no", "")  # ✅ Sudah diperbaiki!
         st.markdown(f"""
         <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center;">
             <div style="background:white; border-radius:16px; padding:1.5rem; max-width:90%; max-height:90vh; box-shadow:0 10px 40px rgba(0,0,0,0.35);">
@@ -567,7 +567,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
             if not df_laporan.empty:
                 # === TABEL 4 KOLOM + FOTO BERFUNGSI ===
-                # Simpan foto_url untuk setiap nomor laporan
                 foto_map = {}
                 data_tabel = []
                 for _, row in df_laporan.iterrows():
@@ -584,7 +583,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
                 df_tampil = pd.DataFrame(data_tabel)
 
-                # Tampilkan tabel
+                # Tampilkan tabel — klik baris untuk lihat foto
                 event = st.dataframe(
                     df_tampil,
                     use_container_width=True,
@@ -596,12 +595,12 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                         "Waktu Lapor": st.column_config.TextColumn("Waktu Lapor", width="medium"),
                         "Nama Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
                         "Status Laporan": st.column_config.TextColumn("Status Laporan", width="medium"),
-                        "📷 Foto": st.column_config.TextColumn("Klik Baris → Lihat Foto", width="small")
+                        "📷 Foto": st.column_config.TextColumn("Lihat Foto", width="small")
                     }
                 )
 
                 # Saat baris diklik → tampilkan foto
-                if event.selection["rows"]:
+                if event.selection and event.selection.get("rows"):
                     idx_dipilih = event.selection["rows"][0]
                     no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
                     foto_url = foto_map.get(no_dipilih, "")
