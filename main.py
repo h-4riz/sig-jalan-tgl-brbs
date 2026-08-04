@@ -514,7 +514,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
 # HALAMAN RIWAYAT & STATUS 
 # --------------------------
 # ==================================================
-# HALAMAN RIWAYAT & STATUS — VERSI FINAL BENAR
+# HALAMAN RIWAYAT — TANPA POPUP, TIDAK BERKEDIP
 # ==================================================
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -523,38 +523,13 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # === TOMBOL TUTUP FOTO — SELALU DI ATAS ===
-    foto_terbuka = st.session_state.get("foto_popup_url", "")
-    no_foto = st.session_state.get("foto_popup_no", "")
-    if foto_terbuka:
-        col_tutup, _ = st.columns([1, 6])
-        with col_tutup:
-            if st.button("✕ TUTUP FOTO", type="primary", use_container_width=True):
-                st.session_state["foto_popup_url"] = None
-                st.session_state["foto_popup_no"] = None
-                st.rerun()
-        st.markdown("---")
-
-    # === TAMPILKAN FOTO JIKA ADA ===
-    if foto_terbuka and foto_terbuka.startswith("https://"):
-        st.markdown(f"""
-        <div style="position:fixed; top:80px; left:0; width:100%; height:calc(100% - 80px); 
-            background:rgba(0,0,0,0.85); z-index:99998; 
-            display:flex; align-items:center; justify-content:center;">
-            <div style="background:white; border-radius:16px; padding:1.5rem; max-width:90%; max-height:85vh;">
-                <h4 style="color:#023e8a; margin:0 0 1rem 0;">📷 Foto Laporan No. {no_foto}</h4>
-                <img src="{foto_terbuka}" style="max-width:100%; max-height:70vh; border-radius:10px;" />
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
     # === FILTER ===
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
-    # === MUAT DATA ===
+    # === MUAT DATA DENGAN CACHE ===
     CACHE_DALAM_DETIK = 60
     df_laporan = pd.DataFrame()
     data = []
@@ -590,7 +565,10 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         if st.session_state.get("daftar_laporan"):
             df_laporan = pd.DataFrame(st.session_state["daftar_laporan"])
 
-    # === TAMPILKAN TABEL ===
+    # === PROSES DATA ===
+    foto_terpilih_url = None
+    foto_terpilih_no = None
+
     if not df_laporan.empty:
         if "No Urut" in df_laporan.columns:
             df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
@@ -637,34 +615,22 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             }
         )
 
-        # === KLIK BUKA / TUTUP FOTO ===
+        # === TAMPILKAN FOTO DI BAWAH TABEL — TANPA POPUP, TANPA RERUN ===
         if event.selection and event.selection.get("rows"):
             idx_dipilih = event.selection["rows"][0]
             no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
             foto_url = foto_map.get(no_dipilih, "")
-            sekarang_terbuka = st.session_state.get("foto_popup_no", "")
 
-            if sekarang_terbuka == no_dipilih:
-                # Klik yang sama = TUTUP
-                st.session_state["foto_popup_url"] = None
-                st.session_state["foto_popup_no"] = None
-                st.rerun()
-            elif foto_url and foto_url.startswith("https://"):
-                # Klik baru = BUKA
-                st.session_state["foto_popup_url"] = foto_url
-                st.session_state["foto_popup_no"] = no_dipilih
-                st.rerun()
+            st.markdown("---")
+            st.subheader(f"📷 Foto Laporan No. {no_dipilih}")
+            if foto_url and foto_url.startswith("https://"):
+                st.image(foto_url, use_container_width=True)
             else:
-                st.info("ℹ️ Foto belum tersedia")
+                st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
         else:
-            # Tidak ada pilihan = TUTUP
-            if st.session_state.get("foto_popup_url"):
-                st.session_state["foto_popup_url"] = None
-                st.session_state["foto_popup_no"] = None
-                st.rerun()
+            st.caption("💡 Klik salah satu baris pada tabel di atas untuk melihat foto laporan")
 
-        st.caption("💡 BUKA = Klik baris | TUTUP = Klik baris yang sama lagi")
-
+        st.markdown("---")
         csv = df_laporan.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="📥 Unduh Data Laporan (CSV)",
