@@ -513,9 +513,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
 # --------------------------
 # HALAMAN RIWAYAT & STATUS 
 # --------------------------
-# ==================================================
-# HALAMAN RIWAYAT — TANPA POPUP, TIDAK BERKEDIP
-# ==================================================
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
         st.session_state["halaman_aktif"] = "beranda"
@@ -523,25 +520,63 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # === FILTER ===
+    # ==============================================
+    # ✅ POPUP FOTO DILETAKKAN DI SINI — LUAR TRY
+    # ==============================================
+    if st.session_state.get("foto_popup_url"):
+        foto_url = st.session_state.get("foto_popup_url", "")
+        no_lap = st.session_state.get("foto_popup_no", "")
+
+        st.markdown(f"""
+        <div style="position:fixed; top:0; left:0; width:100%; height:100%; 
+            background:rgba(0,0,0,0.85); z-index:99999; 
+            display:flex; align-items:center; justify-content:center;">
+            <div style="background:white; border-radius:16px; padding:1.5rem; max-width:90%; max-height:85vh; 
+                box-shadow:0 10px 40px rgba(0,0,0,0.35); position:relative;">
+                <h4 style="color:#023e8a; margin:0 0 1rem 0;">📷 Foto Laporan No. {no_lap}</h4>
+                <img src="{foto_url}" alt="Foto Laporan" 
+                    style="max-width:100%; max-height:70vh; width:auto; height:auto; border-radius:10px;"
+                    onerror="this.parentElement.innerHTML+='<p style=\\'color:red; margin-top:1rem;\\'>⚠️ Foto tidak dapat dimuat (URL tidak valid/tidak dapat diakses)</p>'" />
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Tombol Tutup — SELALU BISA DIKLIK
+        col_tutup, _ = st.columns([1, 8])
+        with col_tutup:
+            if st.button("✕ Tutup Foto", type="primary", use_container_width=True):
+                st.session_state["foto_popup_url"] = None
+                st.session_state["foto_popup_no"] = None
+                st.rerun()
+
+        st.markdown("---")
+        st.caption("💡 Klik tombol di atas untuk menutup foto")
+
+    # ==============================================
+    # ✅ BARIS FILTER — SETELAH POPUP
+    # ==============================================
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
-    # === MUAT DATA DENGAN CACHE ===
+    # ==============================================
+    # ✅ BARU MASUK KE BLOK TRY
+    # ==============================================
     CACHE_DALAM_DETIK = 60
     df_laporan = pd.DataFrame()
-    data = []
 
     try:
         if sheet:
             waktu_sekarang = datetime.datetime.now()
             perlu_muat_ulang = True
-            if ("data_sheet_cache" in st.session_state and "waktu_muat_data" in st.session_state):
+
+            if ("data_sheet_cache" in st.session_state and 
+                "waktu_muat_data" in st.session_state):
                 selisih = (waktu_sekarang - st.session_state["waktu_muat_data"]).total_seconds()
                 if selisih < CACHE_DALAM_DETIK:
                     perlu_muat_ulang = False
+
             if perlu_muat_ulang:
                 try:
                     data = sheet.get_all_records()
@@ -550,94 +585,105 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 except Exception as api_err:
                     pesan_error = str(api_err)
                     if "Quota exceeded" in pesan_error or "429" in pesan_error:
-                        st.warning("⏳ Terlalu banyak akses. Tunggu 1-2 menit lalu coba lagi.")
+                        st.warning("""
+                        ⏳ Terlalu banyak akses data. Tunggu 1–2 menit lalu coba lagi.
+                        Saat ini tampil menggunakan data yang tersimpan terakhir.
+                        """)
                         data = st.session_state.get("data_sheet_cache", [])
                     else:
-                        st.error(f"⚠️ Gagal muat data: {pesan_error}")
+                        st.error(f"⚠️ Gagal memuat data: {pesan_error}")
                         data = st.session_state.get("data_sheet_cache", [])
             else:
                 data = st.session_state["data_sheet_cache"]
+
             df_laporan = pd.DataFrame(data)
+
         else:
             df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
-    except Exception as e:
-        st.error(f"⚠️ Kesalahan: {str(e)}")
-        if st.session_state.get("daftar_laporan"):
-            df_laporan = pd.DataFrame(st.session_state["daftar_laporan"])
 
-    # === PROSES DATA ===
-    foto_terpilih_url = None
-    foto_terpilih_no = None
+        # === PROSES DATA ===
+        if not df_laporan.empty:
+            if "No Urut" in df_laporan.columns:
+                df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
+                df_laporan = df_laporan.dropna(subset=["No Urut"])
+                df_laporan["No Urut"] = df_laporan["No Urut"].astype("Int64")
+                df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
 
-    if not df_laporan.empty:
-        if "No Urut" in df_laporan.columns:
-            df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
-            df_laporan = df_laporan.dropna(subset=["No Urut"])
-            df_laporan["No Urut"] = df_laporan["No Urut"].astype("Int64")
-            df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
+            if filter_status != "Semua":
+                df_laporan = df_laporan[df_laporan["Status"] == filter_status]
+            if filter_ruas != "Semua":
+                df_laporan = df_laporan[df_laporan["Ruas"] == filter_ruas]
+            if cari:
+                df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
-        if filter_status != "Semua":
-            df_laporan = df_laporan[df_laporan["Status"] == filter_status]
-        if filter_ruas != "Semua":
-            df_laporan = df_laporan[df_laporan["Ruas"] == filter_ruas]
-        if cari:
-            df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
+            if not df_laporan.empty:
+                foto_map = {}
+                data_tabel = []
+                for _, row in df_laporan.iterrows():
+                    no_urut = row.get("No Urut", "-")
+                    foto_url = str(row.get("Foto_URL", "")).strip()
+                    foto_map[str(no_urut)] = foto_url
+                    data_tabel.append({
+                        "No": no_urut,
+                        "Waktu Lapor": row.get("Waktu", "-"),
+                        "Nama Ruas": row.get("Ruas", "-"),
+                        "Status Laporan": row.get("Status", "-"),
+                        "📷 Foto": "Ada Foto" if (foto_url and foto_url.startswith("https://")) else "—"
+                    })
 
-    if not df_laporan.empty:
-        foto_map = {}
-        data_tabel = []
-        for _, row in df_laporan.iterrows():
-            no_urut = row.get("No Urut", "-")
-            foto_url = str(row.get("Foto_URL", "")).strip()
-            foto_map[str(no_urut)] = foto_url
-            data_tabel.append({
-                "No": no_urut,
-                "Waktu Lapor": row.get("Waktu", "-"),
-                "Nama Ruas": row.get("Ruas", "-"),
-                "Status Laporan": row.get("Status", "-"),
-                "📷 Foto": "Ada Foto" if (foto_url and foto_url.startswith("https://")) else "—"
-            })
+                df_tampil = pd.DataFrame(data_tabel)
 
-        df_tampil = pd.DataFrame(data_tabel)
+                event = st.dataframe(
+                    df_tampil,
+                    use_container_width=True,
+                    hide_index=True,
+                    on_select="rerun",
+                    selection_mode="single-row",
+                    column_config={
+                        "No": st.column_config.NumberColumn("No", width="small"),
+                        "Waktu Lapor": st.column_config.TextColumn("Waktu Lapor", width="medium"),
+                        "Nama Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
+                        "Status Laporan": st.column_config.TextColumn("Status Laporan", width="medium"),
+                        "📷 Foto": st.column_config.TextColumn("Lihat Foto", width="small")
+                    }
+                )
 
-        event = st.dataframe(
-            df_tampil,
-            use_container_width=True,
-            hide_index=True,
-            on_select="rerun",
-            selection_mode="single-row",
-            column_config={
-                "No": st.column_config.NumberColumn("No", width="small"),
-                "Waktu Lapor": st.column_config.TextColumn("Waktu Lapor", width="medium"),
-                "Nama Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
-                "Status Laporan": st.column_config.TextColumn("Status Laporan", width="medium"),
-                "📷 Foto": st.column_config.TextColumn("Lihat Foto", width="small")
-            }
-        )
+                # === KLIK BUKA FOTO — TIDAK BERKEDIP ===
+                if event.selection and event.selection.get("rows"):
+                    idx_dipilih = event.selection["rows"][0]
+                    no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
+                    foto_url = foto_map.get(no_dipilih, "")
 
-        # === TAMPILKAN FOTO DI BAWAH TABEL — TANPA POPUP, TANPA RERUN ===
-        if event.selection and event.selection.get("rows"):
-            idx_dipilih = event.selection["rows"][0]
-            no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
-            foto_url = foto_map.get(no_dipilih, "")
+                    if foto_url and foto_url.startswith("https://"):
+                        nomor_saat_ini = st.session_state.get("foto_popup_no", "")
+                        if nomor_saat_ini != no_dipilih:
+                            st.session_state["foto_popup_url"] = foto_url
+                            st.session_state["foto_popup_no"] = no_dipilih
+                            st.rerun()
+                    else:
+                        st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
+                else:
+                    if st.session_state.get("foto_popup_url"):
+                        st.session_state["foto_popup_url"] = None
+                        st.session_state["foto_popup_no"] = None
+                        st.rerun()
 
-            st.markdown("---")
-            st.subheader(f"📷 Foto Laporan No. {no_dipilih}")
-            if foto_url and foto_url.startswith("https://"):
-                st.image(foto_url, use_container_width=True)
+                st.caption("💡 Klik baris untuk lihat foto | Klik tombol Tutup untuk menutup")
+
+                csv = df_laporan.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="📥 Unduh Data Laporan (CSV)",
+                    data=csv,
+                    file_name=f"laporan_jalan_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
             else:
-                st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
+                st.info("ℹ️ Tidak ada laporan yang sesuai dengan filter.")
         else:
-            st.caption("💡 Klik salah satu baris pada tabel di atas untuk melihat foto laporan")
+            st.info("ℹ️ Belum ada laporan yang dikirim.")
 
-        st.markdown("---")
-        csv = df_laporan.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 Unduh Data Laporan (CSV)",
-            data=csv,
-            file_name=f"laporan_jalan_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-    else:
-        st.info("ℹ️ Tidak ada laporan yang sesuai / belum ada laporan.")
+    except Exception as e:
+        st.error(f"⚠️ Terjadi kesalahan: {str(e)}")
+        if st.session_state.get("daftar_laporan"):
+            st.dataframe(pd.DataFrame(st.session_state["daftar_laporan"]), use_container_width=True, hide_index=True)
