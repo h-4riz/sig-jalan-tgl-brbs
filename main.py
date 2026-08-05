@@ -453,219 +453,59 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     # =========================================================
     # 🖼️ 1. DEFINISI MODAL DIALOG MENGAMBANG / POP-UP NATIVE
     # =========================================================
-    @st.dialog("📷 Detail Foto Laporan")
-    def popup_foto_dialog(no_id, foto_url, ruas_name):
-        st.write(f"**Nomor Laporan:** #{no_id}")
-        st.write(f"**Ruas Jalan:** {ruas_name}")
-        st.divider()
-        if foto_url and foto_url.startswith("https://"):
-            st.image(foto_url, caption=f"Dokumentasi Laporan #{no_id}", use_container_width=True)
-            st.markdown(f"[🔗 Buka Ukuran Penuh]({foto_url})")
-        else:
-            st.warning("⚠️ Tidak ada foto lampiran untuk laporan ini.")
-
-    # 2. Filter Bar
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
-    with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
-    with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
-
-    CACHE_DALAM_DETIK = 60
-    df_laporan = pd.DataFrame()
-
-    try:
-        if sheet:
-            waktu_sekarang = datetime.datetime.now()
-            perlu_muat_ulang = True
-
-            if ("data_sheet_cache" in st.session_state and "waktu_muat_data" in st.session_state):
-                selisih = (waktu_sekarang - st.session_state["waktu_muat_data"]).total_seconds()
-                if selisih < CACHE_DALAM_DETIK:
-                    perlu_muat_ulang = False
-
-            if perlu_muat_ulang:
-                try:
-                    data = sheet.get_all_records()
-                    st.session_state["data_sheet_cache"] = data
-                    st.session_state["waktu_muat_data"] = waktu_sekarang
-                except Exception as api_err:
-                    data = st.session_state.get("data_sheet_cache", [])
-            else:
-                data = st.session_state["data_sheet_cache"]
-
-            df_laporan = pd.DataFrame(data)
-        else:
-            df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
-
-        if not df_laporan.empty:
-            if "No Urut" in df_laporan.columns:
-                df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
-                df_laporan = df_laporan.dropna(subset=["No Urut"])
-                df_laporan["No Urut"] = df_laporan["No Urut"].astype("Int64")
-                df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
-
-            if filter_status != "Semua" and "Status" in df_laporan.columns:
-                df_laporan = df_laporan[df_laporan["Status"] == filter_status]
-            if filter_ruas != "Semua" and "Ruas" in df_laporan.columns:
-                df_laporan = df_laporan[df_laporan["Ruas"] == filter_ruas]
-            if cari:
-                df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
-
-            if not df_laporan.empty:
-                foto_map = {}
-                ruas_map = {}
-                data_tabel = []
-                for _, row in df_laporan.iterrows():
-                    no_urut = row.get("No Urut", "-")
-                    foto_url = str(row.get("Foto_URL", "")).strip().lstrip("'")
-                    
-                    foto_map[str(no_urut)] = foto_url
-                    ruas_map[str(no_urut)] = row.get("Ruas", "-")
-                    
-                    data_tabel.append({
-                        "No": no_urut,
-                        "Waktu Lapor": row.get("Waktu", "-"),
-                        "Nama Ruas": row.get("Ruas", "-"),
-                        "Status Laporan": row.get("Status", "-"),
-                        "Foto_URL": foto_url
-                    })
-
-                df_tampil = pd.DataFrame(data_tabel)
-
+   # =========================================================
+                # 🖼️ 1. POP-UP DIALOG MENGAMBANG (ST.DIALOG NATIVE)
                 # =========================================================
-                # 🎨 TABEL HTML HOVER + BTN POPUP DENGAN JS INSTAN
-                # =========================================================
-                css_tabel = """<style>
-.tabel-sigap-container {
-    width: 100%;
-    overflow-x: auto;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-    background: #ffffff;
-    margin-bottom: 1rem;
-}
-.tabel-sigap {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.95rem;
-    color: #1e293b;
-}
-.tabel-sigap th {
-    background-color: #f8fafc;
-    color: #475569;
-    font-weight: 700;
-    padding: 14px 16px;
-    text-align: left;
-    border-bottom: 2px solid #e2e8f0;
-}
-.tabel-sigap td {
-    padding: 12px 16px;
-    border-bottom: 1px solid #f1f5f9;
-    transition: all 0.2s ease-in-out;
-}
-/* Efek Hover Warna Pastel Per Kolom */
-.tabel-sigap tbody tr td:nth-child(1):hover { background-color: #fef08a !important; color: #854d0e !important; font-weight: bold; }
-.tabel-sigap tbody tr td:nth-child(2):hover { background-color: #bfdbfe !important; color: #1e40af !important; font-weight: bold; }
-.tabel-sigap tbody tr td:nth-child(3):hover { background-color: #bbf7d0 !important; color: #166534 !important; font-weight: bold; }
-.tabel-sigap tbody tr td:nth-child(4):hover { background-color: #e9d5ff !important; color: #6b21a8 !important; font-weight: bold; }
-.tabel-sigap tbody tr td:nth-child(5):hover { background-color: #fbcfe8 !important; color: #9d174d !important; font-weight: bold; }
-.tabel-sigap tbody tr:hover { background-color: #f8fafc; }
-
-/* Styling Tombol Di Dalam Tabel */
-.btn-foto-popup {
-    background: #22c55e;
-    color: white !important;
-    padding: 6px 12px;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.85rem;
-    display: inline-block;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-.btn-foto-popup:hover {
-    background: #16a34a;
-    transform: translateY(-1px);
-}
-</style>"""
-
-                html_rows = ""
-                for idx, row in df_tampil.iterrows():
-                    no_val = row["No"]
-                    waktu_val = row["Waktu Lapor"]
-                    ruas_val = row["Nama Ruas"]
-                    status_val = row["Status Laporan"]
-                    foto_url = row["Foto_URL"]
-
+                @st.dialog("📷 Detail Foto Laporan")
+                def popup_foto_dialog(no_id, foto_url, ruas_name):
+                    st.write(f"**Nomor Laporan:** #{no_id}")
+                    st.write(f"**Ruas Jalan:** {ruas_name}")
+                    st.divider()
                     if foto_url and foto_url.startswith("https://"):
-                        # Menggunakan event onclick yang langsung berkomunikasi via Session State
-                        tombol_foto = f'''<button class="btn-foto-popup" onclick="panggilPopup('{no_val}')">🖼️ Ada Foto</button>'''
+                        st.image(foto_url, caption=f"Dokumentasi Laporan #{no_id}", use_container_width=True)
+                        st.markdown(f"[🔗 Buka Ukuran Penuh di Tab Baru]({foto_url})")
                     else:
-                        tombol_foto = '<span style="color:#94a3b8;">—</span>'
-
-                    html_rows += f'<tr><td style="text-align: center; font-weight: 600;">{no_val}</td><td>{waktu_val}</td><td>{ruas_val}</td><td>{status_val}</td><td style="text-align: center;">{tombol_foto}</td></tr>'
+                        st.warning("⚠️ Tidak ada foto lampiran untuk laporan ini.")
 
                 # =========================================================
-                # 🎨 RENDER TABEL HTML + JS BRIDGE
+                # 📊 2. TABEL INTERAKTIF NATIVE DENGAN SELECTION EVENT
                 # =========================================================
-                js_bridge = """
-                <script>
-                function panggilPopup(id) {
-                    let inputs = window.parent.document.querySelectorAll('input[aria-label="target_foto_id"]');
-                    if (inputs.length === 0) {
-                        inputs = document.querySelectorAll('input[aria-label="target_foto_id"]');
-                    }
-                    if (inputs.length > 0) {
-                        const inputEl = inputs[0];
-                        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                        if (nativeInputValueSetter) {
-                            nativeInputValueSetter.call(inputEl, id);
-                        } else {
-                            inputEl.value = id;
-                        }
-                        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-                        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                }
-                </script>
-                """
-
-                tabel_html = f'{css_tabel}{js_bridge}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Lihat Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
-
-                # Render Tabel Visual
-                st.markdown(tabel_html, unsafe_allow_html=True)
-
-                # =========================================================
-                # 🎯 INPUT TERSEMBUNYI UNTUK MENANGKAP KLIK JS DAN POPUP
-                # =========================================================
-                st.markdown('<div style="display:none;">', unsafe_allow_html=True)
-                target_id = st.text_input("target_foto_id", key="target_foto_id", label_visibility="collapsed")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # Jika ada ID yang terdeteksi dari klik tabel, panggil Modal
-                if target_id:
-                    url_terpilih = foto_map.get(str(target_id), "")
-                    ruas_terpilih = ruas_map.get(str(target_id), "-")
-                    popup_foto_dialog(target_id, url_terpilih, ruas_terpilih)
-
-                st.markdown("<br>", unsafe_allow_html=True)
-
-                csv = df_laporan.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    label="📥 Unduh Data Laporan (CSV)",
-                    data=csv,
-                    file_name=f"laporan_jalan_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
+                # Tambahkan kolom indikator status foto pada dataframe
+                df_tampil["Status Foto"] = df_tampil["Foto_URL"].apply(
+                    lambda x: "🖼️ Ada Foto" if (isinstance(x, str) and x.startswith("https://")) else "—"
                 )
-            else:
-                st.info("ℹ️ Tidak ada laporan yang sesuai dengan filter.")
-        else:
-            st.info("ℹ️ Belum ada laporan yang dikirim.")
 
-    # ✅ PASANGAN EXCEPT WAJIB DARI BLOK TRY UTAMA
-    except Exception as e:
-        st.error(f"⚠️ Terjadi kesalahan: {str(e)}")
+                # Siapkan dataframe visual tanpa menampilkan URL mentah
+                df_visual = df_tampil[["No", "Waktu Lapor", "Nama Ruas", "Status Laporan", "Status Foto"]]
+
+                st.caption("💡 *Klik / Sorot baris laporan pada tabel di bawah untuk membuka pop-up foto langsung:*")
+
+                # Render tabel native dengan seleksi single-row
+                event = st.dataframe(
+                    df_visual,
+                    use_container_width=True,
+                    hide_index=True,
+                    selection_mode="single-row",
+                    on_select="rerun", # Trigger rerun instan tanpa reload browser
+                    column_config={
+                        "No": st.column_config.NumberColumn("No", width="small"),
+                        "Waktu Lapor": st.column_config.TextColumn("Waktu Lapor"),
+                        "Nama Ruas": st.column_config.TextColumn("Nama Ruas"),
+                        "Status Laporan": st.column_config.TextColumn("Status Laporan"),
+                        "Status Foto": st.column_config.TextColumn("Lihat Foto", width="small")
+                    }
+                )
+
+                # =========================================================
+                # 🔍 3. DETEKSI SELEKSI BARIS & TAMPILKAN POP-UP MENGAMBANG
+                # =========================================================
+                selected_rows = event.selection.rows
+                if selected_rows:
+                    row_idx = selected_rows[0]
+                    data_terpilih = df_tampil.iloc[row_idx]
+                    no_id = data_terpilih["No"]
+                    foto_url = data_terpilih["Foto_URL"]
+                    ruas_name = data_terpilih["Nama Ruas"]
+
+                    # Panggil dialog modal mengambang
+                    popup_foto_dialog(no_id, foto_url, ruas_name)
