@@ -544,8 +544,38 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
                 df_tampil = pd.DataFrame(data_tabel)
 
+                # ==============================================
+                # ✅ FUNGSI PEWARNAAN KOLOM (Pandas Styler)
+                # ==============================================
+                def warnai_kolom(val):
+                    # Mengembalikan warna background pastel & teks sesuai kolom
+                    return 'background-color: #fef08a; color: #854d0e; font-weight: 500;'
+
+                def warnai_waktu(val):
+                    return 'background-color: #bfdbfe; color: #1e40af;'
+
+                def warnai_ruas(val):
+                    return 'background-color: #bbf7d0; color: #166534;'
+
+                def warnai_status(val):
+                    return 'background-color: #e9d5ff; color: #6b21a8;'
+
+                def warnai_foto(val):
+                    if val == "Ada Foto":
+                        return 'background-color: #fbcfe8; color: #9d174d; font-weight: bold;'
+                    return 'color: #94a3b8;'
+
+                # Terapkan Pewarnaan per Kolom
+                df_styled = df_tampil.style\
+                    .map(warnai_kolom, subset=['No'])\
+                    .map(warnai_waktu, subset=['Waktu Lapor'])\
+                    .map(warnai_ruas, subset=['Nama Ruas'])\
+                    .map(warnai_status, subset=['Status Laporan'])\
+                    .map(warnai_foto, subset=['📷 Foto'])
+
+                # Tampilkan DataFrame dengan Style
                 event = st.dataframe(
-                    df_tampil,
+                    df_styled,
                     use_container_width=True,
                     hide_index=True,
                     on_select="rerun",
