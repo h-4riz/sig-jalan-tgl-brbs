@@ -18,18 +18,40 @@ import time
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    
-    /* ... Gaya lain yang sudah ada ... */
+    /* Kolom 1 (No / Checkbox): Hover Warna Kuning Soft */
+div[data-testid="stDataFrame"] table tbody tr td:nth-child(1):hover {
+    background-color: #fef08a !important; /* Yellow 200 */
+    color: #854d0e !important;
+}
 
-    /* ---------------------------------- */
-    /* HOVER EFEK PER KOLOM / SEL TABEL */
-    /* ---------------------------------- */
-    div[data-testid="stDataFrame"] table tbody tr td:hover {
-        background-color: #fef3c7 !important; /* Warna latar sel saat kursor berada di atasnya */
-        color: #92400e !important;           /* Warna teks sel */
-        transition: all 0.15s ease-in-out;
-    }
-    
+/* Kolom 2 (Waktu Lapor): Hover Warna Biru Muda */
+div[data-testid="stDataFrame"] table tbody tr td:nth-child(2):hover {
+    background-color: #bfdbfe !important; /* Blue 200 */
+    color: #1e40af !important;
+}
+
+/* Kolom 3 (Nama Ruas): Hover Warna Hijau Mint */
+div[data-testid="stDataFrame"] table tbody tr td:nth-child(3):hover {
+    background-color: #bbf7d0 !important; /* Green 200 */
+    color: #166534 !important;
+}
+
+/* Kolom 4 (Status Laporan): Hover Warna Ungu Soft */
+div[data-testid="stDataFrame"] table tbody tr td:nth-child(4):hover {
+    background-color: #e9d5ff !important; /* Purple 200 */
+    color: #6b21a8 !important;
+}
+
+/* Kolom 5 (Lihat Foto / Keterangan): Hover Warna Oranye/Pink Soft */
+div[data-testid="stDataFrame"] table tbody tr td:nth-child(5):hover {
+    background-color: #fbcfe8 !important; /* Pink/Orange 200 */
+    color: #9d174d !important;
+}
+
+/* Animasi halus saat kursor berpindah antar sel */
+div[data-testid="stDataFrame"] table tbody tr td {
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+}
     </style>
 """, unsafe_allow_html=True)
 
