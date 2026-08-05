@@ -612,11 +612,26 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 js_bridge = """
                 <script>
                 function panggilPopup(id) {
-                    const inputs = window.parent.document.querySelectorAll('input[aria-label="target_foto_id"]');
-                    if (inputs.length > 0) {
-                        inputs[0].value = id;
-                        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-                        inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+    // Cari elemen input tersembunyi baik di level iframe maupun parent document
+    let inputs = window.parent.document.querySelectorAll('input[aria-label="target_foto_id"]');
+    if (inputs.length === 0) {
+        inputs = document.querySelectorAll('input[aria-label="target_foto_id"]');
+    }
+    
+    if (inputs.length > 0) {
+        const inputEl = inputs[0];
+        // 1. Set nilai ID laporan
+        inputEl.value = id;
+        
+        # 2. Memicu Native Event Handler Streamlit
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+        if (nativeInputValueSetter) {
+            nativeInputValueSetter.call(inputEl, id);
+        }
+        
+        // 3. Dispatch event agar Streamlit menyadari perubahan state secara instan
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                 }
                 </script>
@@ -630,17 +645,21 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 # =========================================================
                 # 🎯 INPUT TERSEMBUNYI UNTUK MENANGKAP KLIK JS DAN POPUP
                 # =========================================================
-                st.markdown('<div style="display:none;">', unsafe_allow_html=True)
-                target_id = st.text_input("target_foto_id", key="target_foto_id", label_visibility="collapsed")
-                st.markdown('</div>', unsafe_allow_html=True)
+                # 1. Input Tersembunyi untuk Menangkap Sinyal JS
+st.markdown('<div style="display:none;">', unsafe_allow_html=True)
+target_id = st.text_input("target_foto_id", key="target_foto_id", label_visibility="collapsed")
+st.markdown('</div>', unsafe_allow_html=True)
 
-                # Jika ada ID yang terdeteksi dari klik tabel, langsung buka Modal Mengambang
-                if target_id:
-                    url_terpilih = foto_map.get(str(target_id), "")
-                    ruas_terpilih = ruas_map.get(str(target_id), "-")
-                    # Panggil Dialog Pop-up Mengambang Streamlit
-                    popup_foto_dialog(target_id, url_terpilih, ruas_terpilih)
-
+# 2. Jika Tombol Diklik -> Buka Pop-Up Dialog Mengambang
+if target_id:
+    url_terpilih = foto_map.get(str(target_id), "")
+    ruas_terpilih = ruas_map.get(str(target_id), "-")
+    
+    # Reset target_id agar modal bisa dibuka ulang
+    st.session_state["target_foto_id"] = "" 
+    
+    # Panggil Dialog Pop-Up Streamlit
+    popup_foto_dialog(target_id, url_terpilih, ruas_terpilih)
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
