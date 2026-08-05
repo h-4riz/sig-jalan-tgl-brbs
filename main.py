@@ -538,91 +538,79 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 # =========================================================
                 # 🎨 TABEL HTML INTERAKTIF DENGAN HOVER WARNA PER KOLOM
                 # =========================================================
-                css_tabel = """
-                <style>
-                .tabel-sigap-container {
-                    width: 100%;
-                    overflow-x: auto;
-                    border-radius: 16px;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-                    background: #ffffff;
-                    margin-bottom: 1rem;
-                }
-                .tabel-sigap {
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-family: 'Inter', sans-serif;
-                    font-size: 0.95rem;
-                    color: #1e293b;
-                }
-                .tabel-sigap th {
-                    background-color: #f8fafc;
-                    color: #475569;
-                    font-weight: 700;
-                    padding: 14px 16px;
-                    text-align: left;
-                    border-bottom: 2px solid #e2e8f0;
-                }
-                .tabel-sigap td {
-                    padding: 12px 16px;
-                    border-bottom: 1px solid #f1f5f9;
-                    transition: all 0.2s ease-in-out;
-                }
-                
-                /* === HOVER WARNA DINAMIS PER KOLOM === */
-                /* Kolom 1 (No): Kuning Soft */
-                .tabel-sigap tbody tr td:nth-child(1):hover {
-                    background-color: #fef08a !important;
-                    color: #854d0e !important;
-                    font-weight: bold;
-                }
-                /* Kolom 2 (Waktu Lapor): Biru Soft */
-                .tabel-sigap tbody tr td:nth-child(2):hover {
-                    background-color: #bfdbfe !important;
-                    color: #1e40af !important;
-                    font-weight: bold;
-                }
-                /* Kolom 3 (Nama Ruas): Hijau Mint Soft */
-                .tabel-sigap tbody tr td:nth-child(3):hover {
-                    background-color: #bbf7d0 !important;
-                    color: #166534 !important;
-                    font-weight: bold;
-                }
-                /* Kolom 4 (Status Laporan): Ungu Soft */
-                .tabel-sigap tbody tr td:nth-child(4):hover {
-                    background-color: #e9d5ff !important;
-                    color: #6b21a8 !important;
-                    font-weight: bold;
-                }
-                /* Kolom 5 (Lihat Foto): Pink Soft */
-                .tabel-sigap tbody tr td:nth-child(5):hover {
-                    background-color: #fbcfe8 !important;
-                    color: #9d174d !important;
-                    font-weight: bold;
-                }
-                
-                /* Hover Highlight Seluruh Baris secara Halus */
-                .tabel-sigap tbody tr:hover {
-                    background-color: #f8fafc;
-                }
+                css_tabel = """<style>
+.tabel-sigap-container {
+    width: 100%;
+    overflow-x: auto;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    background: #ffffff;
+    margin-bottom: 1rem;
+}
+.tabel-sigap {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    color: #1e293b;
+}
+.tabel-sigap th {
+    background-color: #f8fafc;
+    color: #475569;
+    font-weight: 700;
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 2px solid #e2e8f0;
+}
+.tabel-sigap td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    transition: all 0.2s ease-in-out;
+}
 
-                /* Tombol Foto */
-                .btn-foto-tabel {
-                    background: #0284c7;
-                    color: white !important;
-                    padding: 6px 12px;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: 600;
-                    font-size: 0.85rem;
-                    display: inline-block;
-                    transition: background 0.2s ease;
-                }
-                .btn-foto-tabel:hover {
-                    background: #0369a1;
-                }
-                </style>
-                """
+/* === HOVER WARNA DINAMIS PER KOLOM === */
+.tabel-sigap tbody tr td:nth-child(1):hover {
+    background-color: #fef08a !important;
+    color: #854d0e !important;
+    font-weight: bold;
+}
+.tabel-sigap tbody tr td:nth-child(2):hover {
+    background-color: #bfdbfe !important;
+    color: #1e40af !important;
+    font-weight: bold;
+}
+.tabel-sigap tbody tr td:nth-child(3):hover {
+    background-color: #bbf7d0 !important;
+    color: #166534 !important;
+    font-weight: bold;
+}
+.tabel-sigap tbody tr td:nth-child(4):hover {
+    background-color: #e9d5ff !important;
+    color: #6b21a8 !important;
+    font-weight: bold;
+}
+.tabel-sigap tbody tr td:nth-child(5):hover {
+    background-color: #fbcfe8 !important;
+    color: #9d174d !important;
+    font-weight: bold;
+}
+.tabel-sigap tbody tr:hover {
+    background-color: #f8fafc;
+}
+.btn-foto-tabel {
+    background: #0284c7;
+    color: white !important;
+    padding: 6px 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: inline-block;
+}
+.btn-foto-tabel:hover {
+    background: #0369a1;
+}
+</style>"""
 
                 html_rows = ""
                 for idx, row in df_tampil.iterrows():
@@ -637,39 +625,12 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     else:
                         tombol_foto = '<span style="color:#94a3b8;">—</span>'
 
-                    html_rows += f"""
-                    <tr>
-                        <td style="text-align: center; font-weight: 600;">{no_val}</td>
-                        <td>{waktu_val}</td>
-                        <td>{ruas_val}</td>
-                        <td>{status_val}</td>
-                        <td style="text-align: center;">{tombol_foto}</td>
-                    </tr>
-                    """
+                    html_rows += f'<tr><td style="text-align: center; font-weight: 600;">{no_val}</td><td>{waktu_val}</td><td>{ruas_val}</td><td>{status_val}</td><td style="text-align: center;">{tombol_foto}</td></tr>'
 
-                tabel_html = f"""
-                {css_tabel}
-                <div class="tabel-sigap-container">
-                    <table class="tabel-sigap">
-                        <thead>
-                            <tr>
-                                <th style="text-align: center; width: 60px;">No</th>
-                                <th>Waktu Lapor</th>
-                                <th>Nama Ruas</th>
-                                <th>Status Laporan</th>
-                                <th style="text-align: center; width: 130px;">Lihat Foto</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {html_rows}
-                        </tbody>
-                    </table>
-                </div>
-                """
+                tabel_html = f'{css_tabel}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Lihat Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
 
                 st.markdown(tabel_html, unsafe_allow_html=True)
                 st.caption("💡 *Arahkan kursor (hover) pada tiap sel untuk melihat efek warna dinamis.*")
-
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
                     label="📥 Unduh Data Laporan (CSV)",
