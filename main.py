@@ -440,12 +440,14 @@ elif st.session_state["halaman_aktif"] == "lapor":
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
+        # Bersihkan query param saat kembali ke beranda
+        st.query_params.clear()
         st.session_state["halaman_aktif"] = "beranda"
         st.rerun()
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # 1. Definisi Fungsi Modal Pop-up Foto Native
+    # 1. Definisi Dialog Pop-up Foto Native
     @st.dialog("📷 Detail Foto Laporan")
     def popup_foto_dialog(no_id, foto_url, ruas_name):
         st.write(f"**Nomor Laporan:** #{no_id}")
@@ -456,6 +458,11 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             st.markdown(f"[🔗 Buka Ukuran Penuh]({foto_url})")
         else:
             st.warning("⚠️ Tidak ada foto lampiran untuk laporan ini.")
+        
+        st.write("")
+        if st.button("✕ Tutup Modal", type="primary", use_container_width=True):
+            st.query_params.clear()
+            st.rerun()
 
     # 2. Filter Bar
     col_f1, col_f2, col_f3 = st.columns(3)
@@ -491,7 +498,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
 
         if not df_laporan.empty:
-            # Filtering Data
             if "No Urut" in df_laporan.columns:
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
                 df_laporan = df_laporan.dropna(subset=["No Urut"])
@@ -507,11 +513,15 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
             if not df_laporan.empty:
                 foto_map = {}
+                ruas_map = {}
                 data_tabel = []
                 for _, row in df_laporan.iterrows():
                     no_urut = row.get("No Urut", "-")
                     foto_url = str(row.get("Foto_URL", "")).strip().lstrip("'")
+                    
                     foto_map[str(no_urut)] = foto_url
+                    ruas_map[str(no_urut)] = row.get("Ruas", "-")
+                    
                     data_tabel.append({
                         "No": no_urut,
                         "Waktu Lapor": row.get("Waktu", "-"),
@@ -520,11 +530,10 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                         "📷 Foto": "Ada Foto" if (foto_url and foto_url.startswith("https://")) else "—"
                     })
 
-                # ✅ DI SINI df_tampil DIDEFINISIKAN SEBELUM LOOP HTML
                 df_tampil = pd.DataFrame(data_tabel)
 
                 # =========================================================
-                # 🎨 RENDER TABEL HTML HOVER WARNA
+                # 🎨 TABEL HTML HOVER + A-TAG DENGAN QUERY PARAMETER
                 # =========================================================
                 css_tabel = """<style>
 .tabel-sigap-container {
@@ -555,12 +564,31 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     border-bottom: 1px solid #f1f5f9;
     transition: all 0.2s ease-in-out;
 }
+/* Efek Hover Pastel Per Kolom */
 .tabel-sigap tbody tr td:nth-child(1):hover { background-color: #fef08a !important; color: #854d0e !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(2):hover { background-color: #bfdbfe !important; color: #1e40af !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(3):hover { background-color: #bbf7d0 !important; color: #166534 !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(4):hover { background-color: #e9d5ff !important; color: #6b21a8 !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(5):hover { background-color: #fbcfe8 !important; color: #9d174d !important; font-weight: bold; }
 .tabel-sigap tbody tr:hover { background-color: #f8fafc; }
+
+/* Styling Tombol Di Dalam Sel Tabel */
+.btn-foto-tabel {
+    background: #22c55e;
+    color: white !important;
+    padding: 6px 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: inline-block;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.btn-foto-tabel:hover {
+    background: #16a34a;
+    transform: translateY(-1px);
+}
 </style>"""
 
                 html_rows = ""
@@ -570,35 +598,32 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     ruas_val = row["Nama Ruas"]
                     status_val = row["Status Laporan"]
                     foto_url = foto_map.get(str(no_val), "")
-                    status_foto = "🖼️ Ada Foto" if (foto_url and foto_url.startswith("https://")) else "—"
 
-                    html_rows += f'<tr><td style="text-align: center; font-weight: 600;">{no_val}</td><td>{waktu_val}</td><td>{ruas_val}</td><td>{status_val}</td><td style="text-align: center;">{status_foto}</td></tr>'
+                    if foto_url and foto_url.startswith("https://"):
+                        # Klik tautan ini akan memicu Query Parameter ?foto_no=XX
+                        tombol_foto = f'<a href="?foto_no={no_val}" target="_self" class="btn-foto-tabel">🖼️ Ada Foto</a>'
+                    else:
+                        tombol_foto = '<span style="color:#94a3b8;">—</span>'
 
-                tabel_html = f'{css_tabel}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Status Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
+                    html_rows += f'<tr><td style="text-align: center; font-weight: 600;">{no_val}</td><td>{waktu_val}</td><td>{ruas_val}</td><td>{status_val}</td><td style="text-align: center;">{tombol_foto}</td></tr>'
+
+                tabel_html = f'{css_tabel}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Lihat Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
 
                 st.markdown(tabel_html, unsafe_allow_html=True)
-                st.caption("💡 *Arahkan kursor (hover) pada sel tabel untuk efek warna.*")
+                st.caption("💡 *Klik tombol **🖼️ Ada Foto** pada tabel untuk membuka pop-up foto langsung.*")
 
                 # =========================================================
-                # 🖼️ FITUR BUKA POP-UP FOTO (SEAMLESS)
+                # 🔍 DETEKSI KLIK TABEL DAN BUKA DIALOG POP-UP AUTOMATIS
                 # =========================================================
-                st.markdown("---")
-                col_sel, col_btn = st.columns([3, 1])
+                params = st.query_params
+                if "foto_no" in params:
+                    no_terpilih = str(params["foto_no"])
+                    url_terpilih = foto_map.get(no_terpilih, "")
+                    ruas_terpilih = ruas_map.get(no_terpilih, "-")
+                    # Panggil Pop-Up Modal Langsung di Tengah Layar
+                    popup_foto_dialog(no_terpilih, url_terpilih, ruas_terpilih)
 
-                with col_sel:
-                    laporan_terpilih = st.selectbox(
-                        "Pilih Nomor Laporan untuk melihat foto:",
-                        options=df_tampil["No"].tolist(),
-                        format_func=lambda x: f"Laporan #{x} - {df_tampil[df_tampil['No'] == x]['Nama Ruas'].values[0]}"
-                    )
-
-                with col_btn:
-                    st.write("")
-                    st.write("")
-                    if st.button("🖼️ Buka Pop-up Foto", use_container_width=True, type="primary"):
-                        url_terpilih = foto_map.get(str(laporan_terpilih), "")
-                        ruas_terpilih = df_tampil[df_tampil['No'] == laporan_terpilih]['Nama Ruas'].values[0]
-                        popup_foto_dialog(laporan_terpilih, url_terpilih, ruas_terpilih)
+                st.markdown("<br>", unsafe_allow_html=True)
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
