@@ -445,33 +445,16 @@ elif st.session_state["halaman_aktif"] == "lapor":
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
-        st.query_params.clear()
         st.session_state["halaman_aktif"] = "beranda"
         st.rerun()
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # 1. Definisi Dialog Pop-up Foto Native
-    @st.dialog("📷 Detail Foto Laporan")
-    def popup_foto_dialog(no_id, foto_url, ruas_name):
-        st.write(f"**Nomor Laporan:** #{no_id}")
-        st.write(f"**Ruas Jalan:** {ruas_name}")
-        st.divider()
-        if foto_url and foto_url.startswith("https://"):
-            st.image(foto_url, caption=f"Foto Laporan #{no_id}", use_container_width=True)
-            st.markdown(f"[🔗 Buka Ukuran Penuh]({foto_url})")
-        else:
-            st.warning("⚠️ Tidak ada foto lampiran untuk laporan ini.")
-        
-        st.write("")
-        if st.button("✕ Tutup Modal", type="primary", use_container_width=True):
-            # Pertahankan posisi halaman riwayat saat popup ditutup
-            st.query_params["page"] = "riwayat"
-            if "foto_no" in st.query_params:
-                del st.query_params["foto_no"]
-            st.rerun()
+    # Inisialisasi state untuk foto aktif
+    if "foto_aktif_id" not in st.session_state:
+        st.session_state["foto_aktif_id"] = None
 
-    # 2. Filter Bar
+    # Filter Bar
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
@@ -534,20 +517,42 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                         "Waktu Lapor": row.get("Waktu", "-"),
                         "Nama Ruas": row.get("Ruas", "-"),
                         "Status Laporan": row.get("Status", "-"),
-                        "📷 Foto": "Ada Foto" if (foto_url and foto_url.startswith("https://")) else "—"
+                        "Foto_URL": foto_url
                     })
 
                 df_tampil = pd.DataFrame(data_tabel)
 
                 # =========================================================
-                # 🎨 TABEL HTML HOVER + LINK QUERY PARAMETERS DENGAN HALAMAN
+                # 🖼️ AREA FOTO DI ATAS TABEL (MUNCUL TANPA RELOAD)
                 # =========================================================
+                if st.session_state["foto_aktif_id"] is not None:
+                    id_aktif = st.session_state["foto_aktif_id"]
+                    url_foto = foto_map.get(id_aktif, "")
+                    nama_ruas = ruas_map.get(id_aktif, "-")
+
+                    with st.container():
+                        st.markdown(f"### 📷 Foto Laporan #{id_aktif} - {nama_ruas}")
+                        if url_foto and url_foto.startswith("https://"):
+                            st.image(url_foto, caption=f"Dokumentasi Laporan #{id_aktif}", use_container_width=True)
+                        else:
+                            st.warning("⚠️ Tidak ada foto lampiran untuk laporan ini.")
+                        
+                        # Tombol Tutup Foto
+                        if st.button("❌ Tutup Foto", type="secondary"):
+                            st.session_state["foto_aktif_id"] = None
+                            st.rerun()
+                        st.markdown("---")
+
+                # =========================================================
+                # 🎨 TABEL INTERAKTIF STREAMLIT (NATIVE SELECTION / HOVER)
+                # =========================================================
+                # Menampilkan Tabel CSS Hover Visual
                 css_tabel = """<style>
 .tabel-sigap-container {
     width: 100%;
     overflow-x: auto;
     border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     background: #ffffff;
     margin-bottom: 1rem;
 }
@@ -571,31 +576,11 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     border-bottom: 1px solid #f1f5f9;
     transition: all 0.2s ease-in-out;
 }
-/* Efek Hover Pastel Per Kolom */
 .tabel-sigap tbody tr td:nth-child(1):hover { background-color: #fef08a !important; color: #854d0e !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(2):hover { background-color: #bfdbfe !important; color: #1e40af !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(3):hover { background-color: #bbf7d0 !important; color: #166534 !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(4):hover { background-color: #e9d5ff !important; color: #6b21a8 !important; font-weight: bold; }
-.tabel-sigap tbody tr td:nth-child(5):hover { background-color: #fbcfe8 !important; color: #9d174d !important; font-weight: bold; }
 .tabel-sigap tbody tr:hover { background-color: #f8fafc; }
-
-/* Styling Tombol Di Dalam Sel Tabel */
-.btn-foto-tabel {
-    background: #22c55e;
-    color: white !important;
-    padding: 6px 12px;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 0.85rem;
-    display: inline-block;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-.btn-foto-tabel:hover {
-    background: #16a34a;
-    transform: translateY(-1px);
-}
 </style>"""
 
                 html_rows = ""
@@ -604,33 +589,31 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     waktu_val = row["Waktu Lapor"]
                     ruas_val = row["Nama Ruas"]
                     status_val = row["Status Laporan"]
-                    foto_url = foto_map.get(str(no_val), "")
+                    foto_url = row["Foto_URL"]
 
-                    if foto_url and foto_url.startswith("https://"):
-                        # ✅ KUNCI PERBAIKAN: Sertakan page=riwayat agar tidak mental ke beranda
-                        tombol_foto = f'<a href="?page=riwayat&foto_no={no_val}" target="_self" class="btn-foto-tabel">🖼️ Ada Foto</a>'
-                    else:
-                        tombol_foto = '<span style="color:#94a3b8;">—</span>'
+                    status_foto = "🖼️ Ada Foto" if (foto_url and foto_url.startswith("https://")) else "—"
 
-                    html_rows += f'<tr><td style="text-align: center; font-weight: 600;">{no_val}</td><td>{waktu_val}</td><td>{ruas_val}</td><td>{status_val}</td><td style="text-align: center;">{tombol_foto}</td></tr>'
+                    html_rows += f'<tr><td style="text-align: center; font-weight: 600;">{no_val}</td><td>{waktu_val}</td><td>{ruas_val}</td><td>{status_val}</td><td style="text-align: center;">{status_foto}</td></tr>'
 
-                tabel_html = f'{css_tabel}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Lihat Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
+                tabel_html = f'{css_tabel}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Status Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
 
                 st.markdown(tabel_html, unsafe_allow_html=True)
 
                 # =========================================================
-                # 🔍 CEK JIKA ADA QUERY PARAMETER UNTUK FOTO
+                # 🔘 KONTROL PEMILIHAN FOTO MURNI STREAMLIT (TANPA RELOAD)
                 # =========================================================
-                params = st.query_params
-                if "foto_no" in params:
-                    no_terpilih = str(params["foto_no"])
-                    url_terpilih = foto_map.get(no_terpilih, "")
-                    ruas_terpilih = ruas_map.get(no_terpilih, "-")
-                    
-                    # Panggil Pop-Up Modal Langsung di Tengah Layar
-                    popup_foto_dialog(no_terpilih, url_terpilih, ruas_terpilih)
-
-                st.markdown("<br>", unsafe_allow_html=True)
+                st.caption("💡 *Pilih laporan di bawah untuk menampilkan foto secara instant di atas tabel:*")
+                
+                opsi_laporan = {f"Laporan #{r['No']} - {r['Nama Ruas']}": str(r['No']) for _, r in df_tampil.iterrows() if r['Foto_URL'].startswith("https://")}
+                
+                if opsi_laporan:
+                    col_p1, col_p2 = st.columns([3, 1])
+                    with col_p1:
+                        pilihan = st.selectbox("Pilih Laporan dengan Foto:", list(opsi_laporan.keys()), label_visibility="collapsed")
+                    with col_p2:
+                        if st.button("🖼️ Tampilkan Foto", use_container_width=True, type="primary"):
+                            st.session_state["foto_aktif_id"] = opsi_laporan[pilihan]
+                            st.rerun()
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
