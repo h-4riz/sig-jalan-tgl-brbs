@@ -15,6 +15,24 @@ from google.oauth2.service_account import Credentials
 import threading
 import time
 
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
+    /* ... Gaya lain yang sudah ada ... */
+
+    /* ---------------------------------- */
+    /* HOVER EFEK PER KOLOM / SEL TABEL */
+    /* ---------------------------------- */
+    div[data-testid="stDataFrame"] table tbody tr td:hover {
+        background-color: #fef3c7 !important; /* Warna latar sel saat kursor berada di atasnya */
+        color: #92400e !important;           /* Warna teks sel */
+        transition: all 0.15s ease-in-out;
+    }
+    
+    </style>
+""", unsafe_allow_html=True)
+
 # --------------------------
 # KONFIGURASI AWAL + PWA
 # --------------------------
