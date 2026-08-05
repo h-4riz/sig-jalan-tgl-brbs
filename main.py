@@ -445,24 +445,31 @@ elif st.session_state["halaman_aktif"] == "lapor":
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
+        st.query_params.clear()
         st.session_state["halaman_aktif"] = "beranda"
         st.rerun()
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # =========================================================
-    # 🖼️ 1. DEFINISI MODAL DIALOG MENGAMBANG / POP-UP NATIVE
-    # =========================================================
+    # 1. Definisi Dialog Pop-up Foto Native
     @st.dialog("📷 Detail Foto Laporan")
     def popup_foto_dialog(no_id, foto_url, ruas_name):
         st.write(f"**Nomor Laporan:** #{no_id}")
         st.write(f"**Ruas Jalan:** {ruas_name}")
         st.divider()
         if foto_url and foto_url.startswith("https://"):
-            st.image(foto_url, caption=f"Dokumentasi Laporan #{no_id}", use_container_width=True)
+            st.image(foto_url, caption=f"Foto Laporan #{no_id}", use_container_width=True)
             st.markdown(f"[🔗 Buka Ukuran Penuh]({foto_url})")
         else:
             st.warning("⚠️ Tidak ada foto lampiran untuk laporan ini.")
+        
+        st.write("")
+        if st.button("✕ Tutup Modal", type="primary", use_container_width=True):
+            # Pertahankan posisi halaman riwayat saat popup ditutup
+            st.query_params["page"] = "riwayat"
+            if "foto_no" in st.query_params:
+                del st.query_params["foto_no"]
+            st.rerun()
 
     # 2. Filter Bar
     col_f1, col_f2, col_f3 = st.columns(3)
@@ -527,20 +534,20 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                         "Waktu Lapor": row.get("Waktu", "-"),
                         "Nama Ruas": row.get("Ruas", "-"),
                         "Status Laporan": row.get("Status", "-"),
-                        "Foto_URL": foto_url
+                        "📷 Foto": "Ada Foto" if (foto_url and foto_url.startswith("https://")) else "—"
                     })
 
                 df_tampil = pd.DataFrame(data_tabel)
 
                 # =========================================================
-                # 🎨 TABEL HTML HOVER + BTN POPUP DENGAN JS INSTAN
+                # 🎨 TABEL HTML HOVER + LINK QUERY PARAMETERS DENGAN HALAMAN
                 # =========================================================
                 css_tabel = """<style>
 .tabel-sigap-container {
     width: 100%;
     overflow-x: auto;
     border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     background: #ffffff;
     margin-bottom: 1rem;
 }
@@ -564,7 +571,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     border-bottom: 1px solid #f1f5f9;
     transition: all 0.2s ease-in-out;
 }
-/* Efek Hover Warna Pastel Per Kolom */
+/* Efek Hover Pastel Per Kolom */
 .tabel-sigap tbody tr td:nth-child(1):hover { background-color: #fef08a !important; color: #854d0e !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(2):hover { background-color: #bfdbfe !important; color: #1e40af !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(3):hover { background-color: #bbf7d0 !important; color: #166534 !important; font-weight: bold; }
@@ -572,21 +579,20 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 .tabel-sigap tbody tr td:nth-child(5):hover { background-color: #fbcfe8 !important; color: #9d174d !important; font-weight: bold; }
 .tabel-sigap tbody tr:hover { background-color: #f8fafc; }
 
-/* Styling Tombol Di Dalam Tabel */
-.btn-foto-popup {
+/* Styling Tombol Di Dalam Sel Tabel */
+.btn-foto-tabel {
     background: #22c55e;
     color: white !important;
     padding: 6px 12px;
     border-radius: 8px;
-    border: none;
-    cursor: pointer;
+    text-decoration: none;
     font-weight: 600;
     font-size: 0.85rem;
     display: inline-block;
     transition: all 0.2s ease;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
-.btn-foto-popup:hover {
+.btn-foto-tabel:hover {
     background: #16a34a;
     transform: translateY(-1px);
 }
@@ -598,48 +604,31 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     waktu_val = row["Waktu Lapor"]
                     ruas_val = row["Nama Ruas"]
                     status_val = row["Status Laporan"]
-                    foto_url = row["Foto_URL"]
+                    foto_url = foto_map.get(str(no_val), "")
 
                     if foto_url and foto_url.startswith("https://"):
-                        # Menggunakan event onclick yang langsung berkomunikasi via Session State
-                        tombol_foto = f'''<button class="btn-foto-popup" onclick="panggilPopup('{no_val}')">🖼️ Ada Foto</button>'''
+                        # ✅ KUNCI PERBAIKAN: Sertakan page=riwayat agar tidak mental ke beranda
+                        tombol_foto = f'<a href="?page=riwayat&foto_no={no_val}" target="_self" class="btn-foto-tabel">🖼️ Ada Foto</a>'
                     else:
                         tombol_foto = '<span style="color:#94a3b8;">—</span>'
 
                     html_rows += f'<tr><td style="text-align: center; font-weight: 600;">{no_val}</td><td>{waktu_val}</td><td>{ruas_val}</td><td>{status_val}</td><td style="text-align: center;">{tombol_foto}</td></tr>'
 
-                # Script JS kecil agar klik tombol HTML bisa memicu event Streamlit tanpa reload URL
-                js_bridge = """
-                <script>
-                function panggilPopup(id) {
-                    const inputs = window.parent.document.querySelectorAll('input[aria-label="target_foto_id"]');
-                    if (inputs.length > 0) {
-                        inputs[0].value = id;
-                        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-                        inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                }
-                </script>
-                """
+                tabel_html = f'{css_tabel}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Lihat Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
 
-                tabel_html = f'{css_tabel}{js_bridge}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Lihat Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
-
-                # Render Tabel Visual
                 st.markdown(tabel_html, unsafe_allow_html=True)
 
                 # =========================================================
-                # 🎯 INPUT TERSEMBUNYI UNTUK MENANGKAP KLIK JS DAN POPUP
+                # 🔍 CEK JIKA ADA QUERY PARAMETER UNTUK FOTO
                 # =========================================================
-                st.markdown('<div style="display:none;">', unsafe_allow_html=True)
-                target_id = st.text_input("target_foto_id", key="target_foto_id", label_visibility="collapsed")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # Jika ada ID yang terdeteksi dari klik tabel, langsung buka Modal Mengambang
-                if target_id:
-                    url_terpilih = foto_map.get(str(target_id), "")
-                    ruas_terpilih = ruas_map.get(str(target_id), "-")
-                    # Panggil Dialog Pop-up Mengambang Streamlit
-                    popup_foto_dialog(target_id, url_terpilih, ruas_terpilih)
+                params = st.query_params
+                if "foto_no" in params:
+                    no_terpilih = str(params["foto_no"])
+                    url_terpilih = foto_map.get(no_terpilih, "")
+                    ruas_terpilih = ruas_map.get(no_terpilih, "-")
+                    
+                    # Panggil Pop-Up Modal Langsung di Tengah Layar
+                    popup_foto_dialog(no_terpilih, url_terpilih, ruas_terpilih)
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
