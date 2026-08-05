@@ -94,14 +94,6 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.2rem !important; font-weight: 700 !important; }
     
     header, #MainMenu, footer, [data-testid="stSidebar"] { visibility: hidden; }
-
-    /* Hover Tabel Dataframe */
-    div[data-testid="stDataFrame"] table tbody tr td:nth-child(1):hover { background-color: #fef08a !important; color: #854d0e !important; }
-    div[data-testid="stDataFrame"] table tbody tr td:nth-child(2):hover { background-color: #bfdbfe !important; color: #1e40af !important; }
-    div[data-testid="stDataFrame"] table tbody tr td:nth-child(3):hover { background-color: #bbf7d0 !important; color: #166534 !important; }
-    div[data-testid="stDataFrame"] table tbody tr td:nth-child(4):hover { background-color: #e9d5ff !important; color: #6b21a8 !important; }
-    div[data-testid="stDataFrame"] table tbody tr td:nth-child(5):hover { background-color: #fbcfe8 !important; color: #9d174d !important; }
-    div[data-testid="stDataFrame"] table tbody tr td { transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -134,7 +126,6 @@ def load_data_jalan():
         with open("data_jalan.geojson", "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        # Kembalikan struktur GeoJSON kosong jika file belum ada
         return {"type": "FeatureCollection", "features": []}
 
 sheet = init_gsheets()
@@ -544,66 +535,140 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
                 df_tampil = pd.DataFrame(data_tabel)
 
-                # ==============================================
-                # ✅ FUNGSI PEWARNAAN KOLOM (Pandas Styler)
-                # ==============================================
-                def warnai_kolom(val):
-                    # Mengembalikan warna background pastel & teks sesuai kolom
-                    return 'background-color: #fef08a; color: #854d0e; font-weight: 500;'
+                # =========================================================
+                # 🎨 TABEL HTML INTERAKTIF DENGAN HOVER WARNA PER KOLOM
+                # =========================================================
+                css_tabel = """
+                <style>
+                .tabel-sigap-container {
+                    width: 100%;
+                    overflow-x: auto;
+                    border-radius: 16px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                    background: #ffffff;
+                    margin-bottom: 1rem;
+                }
+                .tabel-sigap {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-family: 'Inter', sans-serif;
+                    font-size: 0.95rem;
+                    color: #1e293b;
+                }
+                .tabel-sigap th {
+                    background-color: #f8fafc;
+                    color: #475569;
+                    font-weight: 700;
+                    padding: 14px 16px;
+                    text-align: left;
+                    border-bottom: 2px solid #e2e8f0;
+                }
+                .tabel-sigap td {
+                    padding: 12px 16px;
+                    border-bottom: 1px solid #f1f5f9;
+                    transition: all 0.2s ease-in-out;
+                }
+                
+                /* === HOVER WARNA DINAMIS PER KOLOM === */
+                /* Kolom 1 (No): Kuning Soft */
+                .tabel-sigap tbody tr td:nth-child(1):hover {
+                    background-color: #fef08a !important;
+                    color: #854d0e !important;
+                    font-weight: bold;
+                }
+                /* Kolom 2 (Waktu Lapor): Biru Soft */
+                .tabel-sigap tbody tr td:nth-child(2):hover {
+                    background-color: #bfdbfe !important;
+                    color: #1e40af !important;
+                    font-weight: bold;
+                }
+                /* Kolom 3 (Nama Ruas): Hijau Mint Soft */
+                .tabel-sigap tbody tr td:nth-child(3):hover {
+                    background-color: #bbf7d0 !important;
+                    color: #166534 !important;
+                    font-weight: bold;
+                }
+                /* Kolom 4 (Status Laporan): Ungu Soft */
+                .tabel-sigap tbody tr td:nth-child(4):hover {
+                    background-color: #e9d5ff !important;
+                    color: #6b21a8 !important;
+                    font-weight: bold;
+                }
+                /* Kolom 5 (Lihat Foto): Pink Soft */
+                .tabel-sigap tbody tr td:nth-child(5):hover {
+                    background-color: #fbcfe8 !important;
+                    color: #9d174d !important;
+                    font-weight: bold;
+                }
+                
+                /* Hover Highlight Seluruh Baris secara Halus */
+                .tabel-sigap tbody tr:hover {
+                    background-color: #f8fafc;
+                }
 
-                def warnai_waktu(val):
-                    return 'background-color: #bfdbfe; color: #1e40af;'
+                /* Tombol Foto */
+                .btn-foto-tabel {
+                    background: #0284c7;
+                    color: white !important;
+                    padding: 6px 12px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    font-size: 0.85rem;
+                    display: inline-block;
+                    transition: background 0.2s ease;
+                }
+                .btn-foto-tabel:hover {
+                    background: #0369a1;
+                }
+                </style>
+                """
 
-                def warnai_ruas(val):
-                    return 'background-color: #bbf7d0; color: #166534;'
-
-                def warnai_status(val):
-                    return 'background-color: #e9d5ff; color: #6b21a8;'
-
-                def warnai_foto(val):
-                    if val == "Ada Foto":
-                        return 'background-color: #fbcfe8; color: #9d174d; font-weight: bold;'
-                    return 'color: #94a3b8;'
-
-                # Terapkan Pewarnaan per Kolom
-                df_styled = df_tampil.style\
-                    .map(warnai_kolom, subset=['No'])\
-                    .map(warnai_waktu, subset=['Waktu Lapor'])\
-                    .map(warnai_ruas, subset=['Nama Ruas'])\
-                    .map(warnai_status, subset=['Status Laporan'])\
-                    .map(warnai_foto, subset=['📷 Foto'])
-
-                # Tampilkan DataFrame dengan Style
-                event = st.dataframe(
-                    df_styled,
-                    use_container_width=True,
-                    hide_index=True,
-                    on_select="rerun",
-                    selection_mode="single-row",
-                    column_config={
-                        "No": st.column_config.NumberColumn("No", width="small"),
-                        "Waktu Lapor": st.column_config.TextColumn("Waktu Lapor", width="medium"),
-                        "Nama Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
-                        "Status Laporan": st.column_config.TextColumn("Status Laporan", width="medium"),
-                        "📷 Foto": st.column_config.TextColumn("Lihat Foto", width="small")
-                    }
-                )
-
-                if event.selection and event.selection.get("rows"):
-                    idx_dipilih = event.selection["rows"][0]
-                    no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
-                    foto_url = foto_map.get(no_dipilih, "")
+                html_rows = ""
+                for idx, row in df_tampil.iterrows():
+                    no_val = row["No"]
+                    waktu_val = row["Waktu Lapor"]
+                    ruas_val = row["Nama Ruas"]
+                    status_val = row["Status Laporan"]
+                    foto_url = foto_map.get(str(no_val), "")
 
                     if foto_url and foto_url.startswith("https://"):
-                        nomor_saat_ini = st.session_state.get("foto_popup_no", "")
-                        if nomor_saat_ini != no_dipilih:
-                            st.session_state["foto_popup_url"] = foto_url
-                            st.session_state["foto_popup_no"] = no_dipilih
-                            st.rerun()
+                        tombol_foto = f'<a href="{foto_url}" target="_blank" class="btn-foto-tabel">📷 Buka Foto</a>'
                     else:
-                        st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
+                        tombol_foto = '<span style="color:#94a3b8;">—</span>'
 
-                st.caption("💡 Klik baris tabel untuk melihat foto laporan.")
+                    html_rows += f"""
+                    <tr>
+                        <td style="text-align: center; font-weight: 600;">{no_val}</td>
+                        <td>{waktu_val}</td>
+                        <td>{ruas_val}</td>
+                        <td>{status_val}</td>
+                        <td style="text-align: center;">{tombol_foto}</td>
+                    </tr>
+                    """
+
+                tabel_html = f"""
+                {css_tabel}
+                <div class="tabel-sigap-container">
+                    <table class="tabel-sigap">
+                        <thead>
+                            <tr>
+                                <th style="text-align: center; width: 60px;">No</th>
+                                <th>Waktu Lapor</th>
+                                <th>Nama Ruas</th>
+                                <th>Status Laporan</th>
+                                <th style="text-align: center; width: 130px;">Lihat Foto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {html_rows}
+                        </tbody>
+                    </table>
+                </div>
+                """
+
+                st.markdown(tabel_html, unsafe_allow_html=True)
+                st.caption("💡 *Arahkan kursor (hover) pada tiap sel untuk melihat efek warna dinamis.*")
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
