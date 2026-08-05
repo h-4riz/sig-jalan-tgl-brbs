@@ -12,48 +12,6 @@ from PIL import Image
 import io
 import gspread
 from google.oauth2.service_account import Credentials
-import threading
-import time
-
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    /* Kolom 1 (No / Checkbox): Hover Warna Kuning Soft */
-div[data-testid="stDataFrame"] table tbody tr td:nth-child(1):hover {
-    background-color: #fef08a !important; /* Yellow 200 */
-    color: #854d0e !important;
-}
-
-/* Kolom 2 (Waktu Lapor): Hover Warna Biru Muda */
-div[data-testid="stDataFrame"] table tbody tr td:nth-child(2):hover {
-    background-color: #bfdbfe !important; /* Blue 200 */
-    color: #1e40af !important;
-}
-
-/* Kolom 3 (Nama Ruas): Hover Warna Hijau Mint */
-div[data-testid="stDataFrame"] table tbody tr td:nth-child(3):hover {
-    background-color: #bbf7d0 !important; /* Green 200 */
-    color: #166534 !important;
-}
-
-/* Kolom 4 (Status Laporan): Hover Warna Ungu Soft */
-div[data-testid="stDataFrame"] table tbody tr td:nth-child(4):hover {
-    background-color: #e9d5ff !important; /* Purple 200 */
-    color: #6b21a8 !important;
-}
-
-/* Kolom 5 (Lihat Foto / Keterangan): Hover Warna Oranye/Pink Soft */
-div[data-testid="stDataFrame"] table tbody tr td:nth-child(5):hover {
-    background-color: #fbcfe8 !important; /* Pink/Orange 200 */
-    color: #9d174d !important;
-}
-
-/* Animasi halus saat kursor berpindah antar sel */
-div[data-testid="stDataFrame"] table tbody tr td {
-    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
-}
-    </style>
-""", unsafe_allow_html=True)
 
 # --------------------------
 # KONFIGURASI AWAL + PWA
@@ -109,10 +67,6 @@ if "daftar_laporan" not in st.session_state:
     st.session_state["daftar_laporan"] = []
 if "kamera_aktif" not in st.session_state:
     st.session_state["kamera_aktif"] = False
-if "bot_berjalan" not in st.session_state:
-    st.session_state["bot_berjalan"] = False
-if "foto_popup_url" not in st.session_state:
-    st.session_state["foto_popup_url"] = None
 
 # --------------------------
 # FUNGSI UTAMA APLIKASI
@@ -151,6 +105,8 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
                 hasil = res.json()
                 foto_file_id = hasil["result"]["photo"][-1]["file_id"]
                 info_file = requests.get(f"https://api.telegram.org/bot{token}/getFile?file_id={foto_file_id}").json()
+                
+                # URL Utuh Telegram
                 foto_url = f"https://api.telegram.org/file/bot{token}/{info_file['result']['file_path']}"
                 return True, foto_url
         else:
@@ -160,7 +116,9 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
                 data={"chat_id": chat_id, "text": pesan, "parse_mode": "Markdown"},
                 timeout=20
             )
-        return res.status_code == 200, None
+            if res.status_code == 200:
+                return True, None
+        return False, None
     except Exception as e:
         st.error(f"Kesalahan Telegram: {str(e)}")
         return False, None
@@ -174,8 +132,7 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
         semua_data = sheet.get_all_records()
         no_urut = len(semua_data) + 1
 
-        # PERBAIKAN 1: Tambahkan tanda petik tunggal (') di awal URL foto
-        # Ini memaksa Google Sheets mencatatnya sebagai TEKS MURNI utuh
+        # CARA 1: Simpan sebagai Teks Murni menggunakan tanda petik tunggal (')
         url_simpan = f"'{foto_url}" if foto_url else ""
 
         row = [
@@ -190,10 +147,9 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
             data_baru["Terakhir_Diperbarui"],
             data_baru["Koordinat"],
             data_baru["Link_Maps"],
-            url_simpan  # Gunakan url_simpan
+            url_simpan
         ]
-
-        # PERBAIKAN 2: Tambahkan parameter value_input_option="USER_ENTERED"
+        
         sheet.append_row(row, value_input_option="USER_ENTERED")
         data_baru["No_Urut"] = no_urut
         return True
@@ -201,6 +157,126 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
         st.error(f"Gagal menyimpan ke Google Sheets: {str(e)}")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
+
+@st.cache_data(show_spinner="Memuat data peta...")
+def load_data_jalan():
+    try:
+        with open('jalan_tegal_brebes.geojson', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        st.warning("⚠️ File data jalan tidak ditemukan, peta akan ditampilkan tanpa batas ruas.")
+        return None
+
+# ----------------------------------------------------
+# FUNGSI TABEL CUSTOM DENGAN HOVER 5 WARNA PER KOLOM
+# ----------------------------------------------------
+def tampilkan_tabel_hover_warnawarni(df):
+    kolom_tampil = ["No Urut", "Waktu", "Ruas", "Jenis Masalah", "Status", "Foto_URL"]
+    kolom_ada = [col for col in kolom_tampil if col in df.columns]
+    
+    df_tampil = df[kolom_ada].copy()
+    
+    # CSS Kustom untuk Efek Hover Beda Warna
+    html_css = """
+    <style>
+    .tabel-sigap-container {
+        width: 100%;
+        overflow-x: auto;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        margin-bottom: 2rem;
+        background-color: #ffffff;
+    }
+    .tabel-sigap {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'Inter', sans-serif;
+        color: #1e293b;
+        font-size: 0.95rem;
+    }
+    .tabel-sigap th {
+        background-color: #0284c7;
+        color: #ffffff;
+        text-align: left;
+        padding: 12px 16px;
+        font-weight: 600;
+        border-bottom: 2px solid #0369a1;
+    }
+    .tabel-sigap td {
+        padding: 12px 16px;
+        border-bottom: 1px solid #e2e8f0;
+        transition: all 0.2s ease-in-out;
+    }
+    
+    /* -------------------------------------------------- */
+    /* HOVER 5 WARNA BERBEDA UNTUK TIAP KOLOM             */
+    /* -------------------------------------------------- */
+    
+    /* Kolom 1 (No Urut): Kuning Soft */
+    .tabel-sigap tbody tr td:nth-child(1):hover {
+        background-color: #fef08a !important;
+        color: #854d0e !important;
+        font-weight: bold;
+    }
+    
+    /* Kolom 2 (Waktu Lapor): Biru Soft */
+    .tabel-sigap tbody tr td:nth-child(2):hover {
+        background-color: #bfdbfe !important;
+        color: #1e40af !important;
+        font-weight: bold;
+    }
+    
+    /* Kolom 3 (Nama Ruas): Hijau Mint Soft */
+    .tabel-sigap tbody tr td:nth-child(3):hover {
+        background-color: #bbf7d0 !important;
+        color: #166534 !important;
+        font-weight: bold;
+    }
+    
+    /* Kolom 4 (Jenis Masalah): Oranye Soft */
+    .tabel-sigap tbody tr td:nth-child(4):hover {
+        background-color: #fed7aa !important;
+        color: #9a3412 !important;
+        font-weight: bold;
+    }
+    
+    /* Kolom 5 (Status Laporan): Ungu Soft */
+    .tabel-sigap tbody tr td:nth-child(5):hover {
+        background-color: #e9d5ff !important;
+        color: #6b21a8 !important;
+        font-weight: bold;
+    }
+
+    /* Kolom 6 (Foto Status): Pink Soft */
+    .tabel-sigap tbody tr td:nth-child(6):hover {
+        background-color: #fbcfe8 !important;
+        color: #9d174d !important;
+        font-weight: bold;
+    }
+    </style>
+    """
+    
+    # Render Struktur Tabel HTML
+    html_table = '<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr>'
+    for col in df_tampil.columns:
+        nama_kolom = "Foto" if col == "Foto_URL" else col
+        html_table += f'<th>{nama_kolom}</th>'
+    html_table += '</tr></thead><tbody>'
+    
+    for _, row in df_tampil.iterrows():
+        html_table += '<tr>'
+        for col in df_tampil.columns:
+            val = row[col]
+            if col == "Foto_URL":
+                teks_foto = "🖼️ Ada Foto" if pd.notna(val) and str(val).strip().startswith("https://") else "-"
+                html_table += f'<td>{teks_foto}</td>'
+            else:
+                html_table += f'<td>{val}</td>'
+        html_table += '</tr>'
+    html_table += '</tbody></table></div>'
+    
+    st.markdown(html_css + html_table, unsafe_allow_html=True)
+
 # --------------------------
 # DATA ATRIBUT JALAN
 # --------------------------
@@ -242,23 +318,6 @@ st.markdown("""
         margin-bottom: 2rem;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
     }
-    .btn-besar {
-        width: 100%;
-        padding: 2.5rem;
-        font-size: 1.4rem;
-        font-weight: 700;
-        border-radius: 20px;
-        border: none;
-        background: linear-gradient(135deg, #fbbf24, #f59e0b);
-        color: #0f172a;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 6px 20px rgba(251, 191, 36, 0.4);
-    }
-    .btn-besar:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 10px 28px rgba(251, 191, 36, 0.55);
-    }
     .judul-utama {
         font-size: 3rem;
         font-weight: 800;
@@ -273,53 +332,13 @@ st.markdown("""
         color: #e0f7ff;
         margin-bottom: 3rem;
     }
-    
     .map-wrapper {
         border-radius: 24px;
         overflow: hidden;
         border: 3px solid rgba(255, 255, 255, 0.4);
         box-shadow: 0 6px 24px rgba(0,0,0,0.18);
     }
-    div[data-testid="stMetric"] {
-        background: rgba(15, 23, 42, 0.35) !important;
-        border-radius: 16px;
-        padding: 1rem !important;
-        border-left: 5px solid #fbbf24 !important;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    }
-    div[data-testid="stMetricLabel"] p { font-size: 1rem !important; font-weight: 600 !important; }
-    div[data-testid="stMetricValue"] { font-size: 1.2rem !important; font-weight: 700 !important; }
-    
     header, #MainMenu, footer, [data-testid="stSidebar"] { visibility: hidden; }
-    
-    /* === POPUP FOTO === */
-    .popup-overlay {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        background: rgba(0,0,0,0.75);
-        z-index: 999990;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .popup-box {
-        background: white;
-        border-radius: 16px;
-        padding: 1.2rem;
-        max-width: 90%;
-        max-height: 90vh;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.35);
-    }
-    .popup-box img {
-        max-width: 100%;
-        height: auto;
-        border-radius: 10px;
-    }
-    .popup-tombol-tutup {
-        margin-top: 1rem;
-        text-align: right;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -354,7 +373,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
     data_jalan = load_data_jalan()
 
-    # Mode lokasi
     mode_kerja = st.selectbox(
         "Pilih Cara Pengisian Lokasi",
         options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
@@ -363,7 +381,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
     col1, col2 = st.columns(2)
     with col1: mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
 
-    # Ambil koordinat
     if mode_kerja == "📍 Gunakan GPS Otomatis":
         loc = streamlit_js_eval(
             js_expressions='new Promise((resolve) => { navigator.geolocation.getCurrentPosition((p) => resolve([p.coords.latitude, p.coords.longitude]), (e) => resolve([-6.98, 109.13]), {enableHighAccuracy:true, timeout:8000}); })',
@@ -427,7 +444,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("📝 Isi Laporan Kerusakan")
 
-        # ✅ BAGIAN KAMERA: TIDAK TERBUKA OTOMATIS
         foto = None
         if not st.session_state["kamera_aktif"]:
             if st.button("📸 Ambil Foto Lokasi", use_container_width=True, type="primary"):
@@ -443,7 +459,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # ✅ FORMULIR UTAMA
         with st.form("form_laporan", clear_on_submit=True):
             tipe_masalah = st.selectbox(
                 "Jenis Masalah",
@@ -497,7 +512,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
                     pesan_telegram = f"""
 🚨 *LAPORAN KERUSAKAN JALAN*
 ━━━━━━━━━━━━━━━━━━━━━
-🔢 *No Laporan:* {len(sheet.get_all_records()) + 1 if sheet else "-"}
 📍 *Ruas Jalan:* {atr['nama']}
 🔢 *Nomor Ruas:* {atr['no']}
 ⚠️ *Jenis Masalah:* {tipe_masalah}
@@ -529,9 +543,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
 # --------------------------
 # HALAMAN RIWAYAT & STATUS 
 # --------------------------
-# --------------------------
-# HALAMAN RIWAYAT & STATUS 
-# --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
         st.session_state["halaman_aktif"] = "beranda"
@@ -539,41 +550,11 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # ==============================================
-    # ✅ FUNGSI MODAL POPUP NATIVE STREAMLIT
-    # ==============================================
-    @st.dialog("📷 Detail Foto Laporan")
-    def tampilkan_popup_foto():
-        no_lap = st.session_state.get("foto_popup_no", "")
-        foto_url = st.session_state.get("foto_popup_url", "")
-        
-        st.subheader(f"Laporan No. {no_lap}")
-        if foto_url:
-            st.image(foto_url, use_column_width=True)
-        else:
-            st.error("⚠️ URL Foto tidak valid/tidak dapat diakses.")
-            
-        st.write("")
-        if st.button("✕ Tutup Foto", type="primary", use_container_width=True):
-            st.session_state["foto_popup_url"] = None
-            st.session_state["foto_popup_no"] = None
-            st.rerun()
-
-    # Panggil popup jika session_state terisi
-    if st.session_state.get("foto_popup_url"):
-        tampilkan_popup_foto()
-
-    # ==============================================
-    # ✅ BARIS FILTER
-    # ==============================================
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
-    # ==============================================
-    # ✅ BLOK TRY & DATAFRAME
-    # ==============================================
     CACHE_DALAM_DETIK = 60
     df_laporan = pd.DataFrame()
 
@@ -596,10 +577,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 except Exception as api_err:
                     pesan_error = str(api_err)
                     if "Quota exceeded" in pesan_error or "429" in pesan_error:
-                        st.warning("""
-                        ⏳ Terlalu banyak akses data. Tunggu 1–2 menit lalu coba lagi.
-                        Saat ini tampil menggunakan data yang tersimpan terakhir.
-                        """)
+                        st.warning("⏳ Terlalu banyak akses data. Menampilkan data tersimpan terakhir.")
                         data = st.session_state.get("data_sheet_cache", [])
                     else:
                         st.error(f"⚠️ Gagal memuat data: {pesan_error}")
@@ -608,73 +586,71 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 data = st.session_state["data_sheet_cache"]
 
             df_laporan = pd.DataFrame(data)
-
         else:
             df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
 
-        # === PROSES DATA ===
         if not df_laporan.empty:
+            df_laporan.columns = df_laporan.columns.str.strip()
+            
             if "No Urut" in df_laporan.columns:
                 df_laporan["No Urut"] = pd.to_numeric(df_laporan["No Urut"], errors="coerce")
                 df_laporan = df_laporan.dropna(subset=["No Urut"])
                 df_laporan["No Urut"] = df_laporan["No Urut"].astype("Int64")
                 df_laporan = df_laporan.sort_values(by="No Urut", ascending=False).reset_index(drop=True)
 
-            if filter_status != "Semua":
+            if filter_status != "Semua" and "Status" in df_laporan.columns:
                 df_laporan = df_laporan[df_laporan["Status"] == filter_status]
-            if filter_ruas != "Semua":
+            if filter_ruas != "Semua" and "Ruas" in df_laporan.columns:
                 df_laporan = df_laporan[df_laporan["Ruas"] == filter_ruas]
             if cari:
                 df_laporan = df_laporan[df_laporan.apply(lambda row: cari.lower() in str(row).lower(), axis=1)]
 
             if not df_laporan.empty:
-                foto_map = {}
-                data_tabel = []
-                for _, row in df_laporan.iterrows():
-                    no_urut = row.get("No Urut", "-")
-                    foto_url = str(row.get("Foto_URL", "")).strip()
-                    foto_map[str(no_urut)] = foto_url
-                    data_tabel.append({
-                        "No": no_urut,
-                        "Waktu Lapor": row.get("Waktu", "-"),
-                        "Nama Ruas": row.get("Ruas", "-"),
-                        "Status Laporan": row.get("Status", "-"),
-                        "📷 Foto": "Ada Foto" if (foto_url and foto_url.startswith("https://")) else "—"
-                    })
+                if "Foto_URL" not in df_laporan.columns:
+                    df_laporan["Foto_URL"] = None
+                else:
+                    df_laporan["Foto_URL"] = df_laporan["Foto_URL"].apply(
+                        lambda x: str(x).strip() if pd.notna(x) and str(x).strip().startswith("https://") else None
+                    )
 
-                df_tampil = pd.DataFrame(data_tabel)
+                # 1. MENAMPILKAN TABEL CUSTOML DENGAN HOVER BEDA WARNA PER KOLOM
+                st.subheader("📊 Tabel Data Laporan")
+                tampilkan_tabel_hover_warnawarni(df_laporan)
 
-                event = st.dataframe(
-                    df_tampil,
-                    use_container_width=True,
-                    hide_index=True,
-                    on_select="rerun",
-                    selection_mode="single-row",
-                    column_config={
-                        "No": st.column_config.NumberColumn("No", width="small"),
-                        "Waktu Lapor": st.column_config.TextColumn("Waktu Lapor", width="medium"),
-                        "Nama Ruas": st.column_config.TextColumn("Nama Ruas", width="large"),
-                        "Status Laporan": st.column_config.TextColumn("Status Laporan", width="medium"),
-                        "📷 Foto": "Lihat Foto"
-                    }
-                )
+                # 2. DETAIL & FOTO UKURAN PENUH
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.subheader("🖼️ Detail & Foto Lengkap Per Laporan")
+                
+                for idx, row in df_laporan.iterrows():
+                    no_lap = row.get("No Urut", "-")
+                    ruas_lap = row.get("Ruas", "-")
+                    masalah_lap = row.get("Jenis Masalah", "-")
+                    foto_url = row.get("Foto_URL", None)
 
-                # === KLIK BUKA FOTO ===
-                if event.selection and event.selection.get("rows"):
-                    idx_dipilih = event.selection["rows"][0]
-                    no_dipilih = str(df_tampil.iloc[idx_dipilih]["No"])
-                    foto_url = foto_map.get(no_dipilih, "")
+                    with st.expander(f"📌 Laporan #{no_lap} - {ruas_lap} ({masalah_lap})"):
+                        col_img, col_info = st.columns([1, 1])
+                        
+                        with col_img:
+                            if foto_url:
+                                st.image(foto_url, caption=f"Foto Laporan #{no_lap}", use_column_width=True)
+                            else:
+                                st.info("ℹ️ Foto tidak tersedia untuk laporan ini.")
+                        
+                        with col_info:
+                            st.markdown(f"**🔢 Nomor Laporan:** {no_lap}")
+                            st.markdown(f"**⏰ Waktu:** {row.get('Waktu', '-')}")
+                            st.markdown(f"**📍 Ruas Jalan:** {ruas_lap} (ID: {row.get('No Ruas', '-')})")
+                            st.markdown(f"**🛣️ KM:** {row.get('KM', '-')}")
+                            st.markdown(f"**⚠️ Jenis Masalah:** {masalah_lap}")
+                            st.markdown(f"**📝 Keterangan:** {row.get('Keterangan', '-')}")
+                            st.markdown(f"**📊 Status:** {row.get('Status', '-')}")
+                            st.markdown(f"**🔄 Terakhir Diperbarui:** {row.get('Terakhir Diperbarui', '-')}")
+                            
+                            link_m = row.get("Link Maps", "")
+                            if link_m and str(link_m).startswith("http"):
+                                st.markdown(f"👉 [Buka Lokasi di Google Maps]({link_m})")
 
-                    if foto_url and foto_url.startswith("https://"):
-                        nomor_saat_ini = st.session_state.get("foto_popup_no", "")
-                        if nomor_saat_ini != no_dipilih:
-                            st.session_state["foto_popup_url"] = foto_url
-                            st.session_state["foto_popup_no"] = no_dipilih
-                            st.rerun()
-                    else:
-                        st.info("ℹ️ Foto belum tersedia untuk laporan ini.")
-
-                st.caption("💡 Klik baris tabel untuk melihat foto laporan.")
+                st.markdown("<br>", unsafe_allow_html=True)
 
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
