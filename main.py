@@ -129,16 +129,21 @@ def load_data_jalan():
         return {"type": "FeatureCollection", "features": []}
 
 sheet = init_gsheets()
+# --------------------------
+# KONTROL NAVIGATION & QUERY PARAMS
+# --------------------------
+# Cek query parameter di URL saat pertama kali load / refresh
+params = st.query_params
 
-# Inisialisasi Session State
-if "halaman_aktif" not in st.session_state:
+if "page" in params:
+    st.session_state["halaman_aktif"] = params["page"]
+elif "halaman_aktif" not in st.session_state:
     st.session_state["halaman_aktif"] = "beranda"
+
 if "daftar_laporan" not in st.session_state:
     st.session_state["daftar_laporan"] = []
 if "kamera_aktif" not in st.session_state:
     st.session_state["kamera_aktif"] = False
-if "foto_popup_url" not in st.session_state:
-    st.session_state["foto_popup_url"] = None
 
 # --------------------------
 # DATA ATRIBUT JALAN
@@ -440,7 +445,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
-        # Bersihkan query param saat kembali ke beranda
         st.query_params.clear()
         st.session_state["halaman_aktif"] = "beranda"
         st.rerun()
@@ -461,7 +465,10 @@ elif st.session_state["halaman_aktif"] == "riwayat":
         
         st.write("")
         if st.button("✕ Tutup Modal", type="primary", use_container_width=True):
-            st.query_params.clear()
+            # Pertahankan posisi halaman riwayat saat popup ditutup
+            st.query_params["page"] = "riwayat"
+            if "foto_no" in st.query_params:
+                del st.query_params["foto_no"]
             st.rerun()
 
     # 2. Filter Bar
@@ -533,7 +540,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_tampil = pd.DataFrame(data_tabel)
 
                 # =========================================================
-                # 🎨 TABEL HTML HOVER + A-TAG DENGAN QUERY PARAMETER
+                # 🎨 TABEL HTML HOVER + LINK QUERY PARAMETERS DENGAN HALAMAN
                 # =========================================================
                 css_tabel = """<style>
 .tabel-sigap-container {
@@ -600,8 +607,8 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     foto_url = foto_map.get(str(no_val), "")
 
                     if foto_url and foto_url.startswith("https://"):
-                        # Klik tautan ini akan memicu Query Parameter ?foto_no=XX
-                        tombol_foto = f'<a href="?foto_no={no_val}" target="_self" class="btn-foto-tabel">🖼️ Ada Foto</a>'
+                        # ✅ KUNCI PERBAIKAN: Sertakan page=riwayat agar tidak mental ke beranda
+                        tombol_foto = f'<a href="?page=riwayat&foto_no={no_val}" target="_self" class="btn-foto-tabel">🖼️ Ada Foto</a>'
                     else:
                         tombol_foto = '<span style="color:#94a3b8;">—</span>'
 
@@ -610,16 +617,16 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 tabel_html = f'{css_tabel}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Lihat Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
 
                 st.markdown(tabel_html, unsafe_allow_html=True)
-                st.caption("💡 *Klik tombol **🖼️ Ada Foto** pada tabel untuk membuka pop-up foto langsung.*")
 
                 # =========================================================
-                # 🔍 DETEKSI KLIK TABEL DAN BUKA DIALOG POP-UP AUTOMATIS
+                # 🔍 CEK JIKA ADA QUERY PARAMETER UNTUK FOTO
                 # =========================================================
                 params = st.query_params
                 if "foto_no" in params:
                     no_terpilih = str(params["foto_no"])
                     url_terpilih = foto_map.get(no_terpilih, "")
                     ruas_terpilih = ruas_map.get(no_terpilih, "-")
+                    
                     # Panggil Pop-Up Modal Langsung di Tengah Layar
                     popup_foto_dialog(no_terpilih, url_terpilih, ruas_terpilih)
 
