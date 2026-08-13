@@ -1,20 +1,23 @@
 {
   "name": "SIGAP TEGES",
-  "short_name": "SIGAP TEGES",
+  "short_name": "SIGAPTEGES",
+  "description": "Sistem Informasi Geografis & Pelaporan Kondisi Jalan",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#023e8a",
   "theme_color": "#023e8a",
+  "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/1047/1047785.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "./static/logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
     },
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/1047/1047785.png",
+      "src": "./static/logo512.png",
+      "type": "image/png",
       "sizes": "512x512",
-      "type": "image/png"
+      "purpose": "any maskable"
     }
   ]
 }
