@@ -19,7 +19,7 @@ from google.oauth2.service_account import Credentials
 st.set_page_config(
     layout="wide",
     page_title="SIGAP TEGES",
-    page_icon="🛣️",
+    page_icon="logo192.jpg",
     initial_sidebar_state="collapsed"
 )
 
@@ -247,6 +247,196 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
         st.session_state["daftar_laporan"].append(data_baru)
         return False
 
+# ==================================================
+# ✅ FUNGSI BARU: PEMBARUAN STATUS DARI TELEGRAM
+# ==================================================
+def perbarui_status_laporan(no_laporan, status_baru):
+    """Mencari laporan berdasarkan Nomor Urut & memperbarui statusnya"""
+    if not sheet:
+        return False, "⚠️ Tidak terhubung ke Google Sheets"
+    
+    try:
+        semua_data = sheet.get_all_records()
+        if not semua_data:
+            return False, "⚠️ Belum ada data laporan di Google Sheets"
+        
+        baris_ditemukan = None
+        nomor_baris = None
+        
+        # Cari baris yang nomor urutnya sesuai
+        for indeks, baris in enumerate(semua_data, start=2):  # start=2 karena baris 1 = judul
+            no_dari_sheet = str(baris.get("No Urut", "")).strip()
+            no_cari = str(no_laporan).strip()
+            if no_dari_sheet == no_cari:
+                baris_ditemukan = baris
+                nomor_baris = indeks
+                break
+        
+        if not baris_ditemukan:
+            return False, f"⚠️ Laporan nomor **{no_laporan}** tidak ditemukan"
+        
+        # Daftar status HARUS SAMA PERSIS dengan pilihan filter di halaman Riwayat
+        DAFTAR_STATUS_VALID = [
+            "📥 Baru Dilaporkan",
+            "⚙️ Sedang Dalam Proses Penanganan",
+            "✅ Sesuai Kondisi Penanganan",
+            "❌ Ditunda / Masuk Dalam Rencana Penanganan"
+        ]
+        
+        if status_baru not in DAFTAR_STATUS_VALID:
+            return False, f"""⚠️ Status tidak valid!
+
+Pilih salah satu persis seperti berikut:
+
+📥 Baru Dilaporkan
+⚙️ Sedang Dalam Proses Penanganan
+✅ Sesuai Kondisi Penanganan
+❌ Ditunda / Masuk Dalam Rencana Penanganan
+
+Contoh:
+/update {no_laporan} ⚙️ Sedang Dalam Proses Penanganan"""
+        
+        # Cari posisi kolom Status & Terakhir_Diperbarui
+        kolom_status = None
+        kolom_waktu = None
+        daftar_judul = semua_data[0].keys()
+        
+        for nomor_kolom, nama_kolom in enumerate(daftar_judul, start=1):
+            nama = str(nama_kolom).strip().lower()
+            if nama == "status":
+                kolom_status = nomor_kolom
+            if nama in ["terakhir diperbarui", "terakhir_diperbarui"]:
+                kolom_waktu = nomor_kolom
+        
+        if not kolom_status:
+            return False, "⚠️ Kolom 'Status' tidak ditemukan di Google Sheets"
+        
+        # Perbarui Status
+        waktu_sekarang = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        sheet.update_cell(nomor_baris, kolom_status, status_baru)
+        
+        # Perbarui Waktu Pembaruan
+        if kolom_waktu:
+            sheet.update_cell(nomor_baris, kolom_waktu, waktu_sekarang)
+        
+        # Hapus cache agar halaman Riwayat langsung memuat data baru
+        if "data_sheet_cache" in st.session_state:
+            del st.session_state["data_sheet_cache"]
+        if "waktu_muat_data" in st.session_state:
+            del st.session_state["waktu_muat_data"]
+        
+        return True, f"""✅ **Laporan #{no_laporan} DIPERBARUI!**
+
+Status baru:
+{status_baru}
+
+⏰ Diperbarui: {waktu_sekarang}
+
+> Buka halaman **Riwayat & Status Laporan** untuk melihat perubahannya."""
+    
+    except Exception as e:
+        return False, f"⚠️ Kesalahan: {str(e)}"
+
+# ==================================================
+# ✅ FUNGSI BARU: PENERIMA PERINTAH DARI TELEGRAM
+# ==================================================
+def proses_perintah_telegram():
+    """Menerima perintah /update dari Telegram via Webhook"""
+    try:
+        import json
+        
+        # Baca data yang dikirim Telegram
+        body_raw = st.context.request_body
+        if not body_raw:
+            return
+        
+        update = json.loads(body_raw)
+        
+        # Pastikan ada pesan teks
+        if "message" not in update or "text" not in update["message"]:
+            return
+        
+        teks_pesan = update["message"]["text"].strip()
+        chat_id = update["message"]["chat"]["id"]
+        token = st.secrets["TELEGRAM_TOKEN"]
+        
+        # Fungsi bantu kirim balasan
+        def balas(pesan_teks):
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    data={
+                        "chat_id": chat_id,
+                        "text": pesan_teks,
+                        "parse_mode": "Markdown"
+                    },
+                    timeout=15
+                )
+            except:
+                pass
+        
+        # === PERINTAH /update ===
+        if teks_pesan.startswith("/update"):
+            bagian = teks_pesan.split(maxsplit=2)
+            
+            if len(bagian) == 1:
+                # Hanya ketik /update saja
+                balas("""📋 **Perintah Pembaruan Status Laporan**
+
+Gunakan format:
+`/update [Nomor Laporan] [Status Baru]`
+
+Contoh:
+`/update 49 ⚙️ Sedang Dalam Proses Penanganan`
+
+Pilihan status yang tersedia:
+📥 Baru Dilaporkan
+⚙️ Sedang Dalam Proses Penanganan
+✅ Sesuai Kondisi Penanganan
+❌ Ditunda / Masuk Dalam Rencana Penanganan""")
+            
+            elif len(bagian) == 2:
+                # Hanya nomor laporan
+                no_laporan = bagian[1]
+                balas(f"""📋 **Laporan Nomor {no_laporan}**
+
+Silakan kirim perintah lengkap dengan status:
+
+`/update {no_laporan} ⚙️ Sedang Dalam Proses Penanganan`
+
+Pilihan status:
+⚙️ Sedang Dalam Proses Penanganan
+✅ Sesuai Kondisi Penanganan
+❌ Ditunda / Masuk Dalam Rencana Penanganan""")
+            
+            elif len(bagian) >= 3:
+                # Lengkap: nomor + status
+                no_laporan = bagian[1]
+                status_baru = bagian[2]
+                berhasil, pesan_balasan = perbarui_status_laporan(no_laporan, status_baru)
+                balas(pesan_balasan)
+        
+        # === PERINTAH /start ===
+        elif teks_pesan.startswith("/start"):
+            balas("""✅ **Bot Pembaruan Status Laporan Aktif!**
+
+Gunakan perintah:
+`/update [Nomor Laporan] [Status Baru]`
+
+Contoh:
+`/update 49 ⚙️ Sedang Dalam Proses Penanganan`""")
+    
+    except Exception as e:
+        pass
+    
+    st.stop()
+
+# ==================================================
+# ✅ CEK JIKA PANGGILAN DARI TELEGRAM WEBHOOK
+# ==================================================
+if st.query_params.get("webhook") == "telegram":
+    proses_perintah_telegram()
+
 # --------------------------
 # HALAMAN BERANDA
 # --------------------------
@@ -464,8 +654,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             st.warning("⚠️ Tidak ada foto lampiran untuk laporan ini.")
         
         st.write("")
-        if st.button("✕ Tutup Modal", type="primary", use_container_width=True):
-            # Pertahankan posisi halaman riwayat saat popup ditutup
+        if st.button("✕ Tutup ", type="primary", use_container_width=True):
             st.query_params["page"] = "riwayat"
             if "foto_no" in st.query_params:
                 del st.query_params["foto_no"]
@@ -477,7 +666,9 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
-    CACHE_DALAM_DETIK = 60
+    # ⚡ Cache diperkecil agar status dari Telegram cepat muncul
+    CACHE_DALAM_DETIK = 5  # Dipercepat dari 60 detik → 5 detik
+
     df_laporan = pd.DataFrame()
 
     try:
@@ -540,7 +731,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_tampil = pd.DataFrame(data_tabel)
 
                 # =========================================================
-                # 🎨 TABEL HTML HOVER + LINK QUERY PARAMETERS DENGAN HALAMAN
+                # 🎨 TABEL HTML HOVER + LINK QUERY PARAMETERS
                 # =========================================================
                 css_tabel = """<style>
 .tabel-sigap-container {
@@ -571,15 +762,12 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     border-bottom: 1px solid #f1f5f9;
     transition: all 0.2s ease-in-out;
 }
-/* Efek Hover Pastel Per Kolom */
 .tabel-sigap tbody tr td:nth-child(1):hover { background-color: #fef08a !important; color: #854d0e !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(2):hover { background-color: #bfdbfe !important; color: #1e40af !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(3):hover { background-color: #bbf7d0 !important; color: #166534 !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(4):hover { background-color: #e9d5ff !important; color: #6b21a8 !important; font-weight: bold; }
 .tabel-sigap tbody tr td:nth-child(5):hover { background-color: #fbcfe8 !important; color: #9d174d !important; font-weight: bold; }
 .tabel-sigap tbody tr:hover { background-color: #f8fafc; }
-
-/* Styling Tombol Di Dalam Sel Tabel */
 .btn-foto-tabel {
     background: #22c55e;
     color: white !important;
@@ -607,7 +795,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     foto_url = foto_map.get(str(no_val), "")
 
                     if foto_url and foto_url.startswith("https://"):
-                        # ✅ KUNCI PERBAIKAN: Sertakan page=riwayat agar tidak mental ke beranda
                         tombol_foto = f'<a href="?page=riwayat&foto_no={no_val}" target="_self" class="btn-foto-tabel">🖼️ Ada Foto</a>'
                     else:
                         tombol_foto = '<span style="color:#94a3b8;">—</span>'
@@ -626,8 +813,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     no_terpilih = str(params["foto_no"])
                     url_terpilih = foto_map.get(no_terpilih, "")
                     ruas_terpilih = ruas_map.get(no_terpilih, "-")
-                    
-                    # Panggil Pop-Up Modal Langsung di Tengah Layar
                     popup_foto_dialog(no_terpilih, url_terpilih, ruas_terpilih)
 
                 st.markdown("<br>", unsafe_allow_html=True)
