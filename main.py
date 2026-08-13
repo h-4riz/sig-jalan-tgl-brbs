@@ -4,6 +4,7 @@ from streamlit_folium import st_folium
 import json
 import pandas as pd
 import datetime
+import time
 from shapely.geometry import shape, Point
 from shapely.ops import nearest_points
 from streamlit_js_eval import streamlit_js_eval
@@ -129,10 +130,10 @@ def load_data_jalan():
         return {"type": "FeatureCollection", "features": []}
 
 sheet = init_gsheets()
+
 # --------------------------
 # KONTROL NAVIGATION & QUERY PARAMS
 # --------------------------
-# Cek query parameter di URL saat pertama kali load / refresh
 params = st.query_params
 
 if "page" in params:
@@ -161,6 +162,79 @@ DATA_ATRIBUT = {
     "Jalan Provinsi_10": {"nama": "Jl. Raya Sirampog - Bumiayu", "no": "065", "km": "-"},
     "Jalan Provinsi_11": {"nama": "Jl. Raya Morongso - Tuwel - Sirampog", "no": "066", "km": "-"},
 }
+
+# --------------------------
+# FUNGSI: PERBARUI STATUS LAPORAN
+# --------------------------
+def perbarui_status_laporan(no_laporan, status_baru):
+    """Mencari laporan berdasarkan Nomor Urut & memperbarui statusnya"""
+    if not sheet:
+        return False, "⚠️ Tidak terhubung ke Google Sheets"
+    
+    try:
+        semua_data = sheet.get_all_records()
+        if not semua_data:
+            return False, "⚠️ Belum ada data laporan di Google Sheets"
+        
+        nomor_baris = None
+        
+        # Cari baris yang nomor urutnya sesuai
+        for indeks, baris in enumerate(semua_data, start=2):
+            no_dari_sheet = str(baris.get("No Urut", "")).strip()
+            no_cari = str(no_laporan).strip()
+            if no_dari_sheet == no_cari:
+                nomor_baris = indeks
+                break
+        
+        if not nomor_baris:
+            return False, f"⚠️ Laporan nomor **{no_laporan}** tidak ditemukan"
+        
+        DAFTAR_STATUS_VALID = [
+            "📥 Baru Dilaporkan",
+            "⚙️ Sedang Dalam Proses Penanganan",
+            "✅ Sesuai Kondisi Penanganan",
+            "❌ Ditunda / Masuk Dalam Rencana Penanganan"
+        ]
+        
+        if status_baru not in DAFTAR_STATUS_VALID:
+            return False, f"⚠️ Status tidak dikenali!"
+        
+        # Cari posisi kolom
+        kolom_status = None
+        kolom_waktu = None
+        if semua_data:
+            daftar_judul = semua_data[0].keys()
+            for nomor_kolom, nama_kolom in enumerate(daftar_judul, start=1):
+                nama = str(nama_kolom).strip().lower()
+                if nama == "status":
+                    kolom_status = nomor_kolom
+                if nama in ["terakhir diperbarui", "terakhir_diperbarui"]:
+                    kolom_waktu = nomor_kolom
+        
+        if not kolom_status:
+            return False, "⚠️ Kolom 'Status' tidak ditemukan"
+        
+        waktu_sekarang = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        sheet.update_cell(nomor_baris, kolom_status, status_baru)
+        
+        if kolom_waktu:
+            sheet.update_cell(nomor_baris, kolom_waktu, waktu_sekarang)
+        
+        # Hapus cache agar halaman Riwayat langsung segar
+        if "data_sheet_cache" in st.session_state:
+            del st.session_state["data_sheet_cache"]
+        if "waktu_muat_data" in st.session_state:
+            del st.session_state["waktu_muat_data"]
+        
+        return True, f"""✅ **Laporan #{no_laporan} DIPERBARUI!**
+
+Status baru:
+{status_baru}
+
+⏰ Diperbarui: {waktu_sekarang}"""
+    
+    except Exception as e:
+        return False, f"⚠️ Kesalahan: {str(e)}"
 
 # --------------------------
 # FUNGSI UTAMA APLIKASI
@@ -221,7 +295,7 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
         return False
     try:
         semua_data = sheet.get_all_records()
-        no_urut = len(semua_data) + 1
+        no_urut = len(semua_data) + 1 if semua_data else 1
         url_simpan = f"'{foto_url}" if foto_url else ""
 
         row = [
@@ -246,237 +320,122 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
         st.error(f"Gagal menyimpan ke Google Sheets: {str(e)}")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
+
 # ==================================================
-# ✅ FUNGSI YANG HILANG: PEMBARUAN STATUS KE GOOGLE SHEETS
+# ✅ SISTEM BARU: PROSES PERINTAH DARI TELEGRAM (TANPA WEBHOOK)
 # ==================================================
-def perbarui_status_laporan(no_laporan, status_baru):
-    """Mencari laporan berdasarkan Nomor Urut & memperbarui statusnya"""
-    if not sheet:
-        return False, "⚠️ Tidak terhubung ke Google Sheets"
+if st.query_params.get("proses_perintah") == "ya":
+    st.title("🔄 Memproses Perintah Telegram...")
     
     try:
-        semua_data = sheet.get_all_records()
-        if not semua_data:
-            return False, "⚠️ Belum ada data laporan di Google Sheets"
-        
-        nomor_baris = None
-        
-        # Cari baris yang nomor urutnya sesuai
-        for indeks, baris in enumerate(semua_data, start=2):  # baris 1 = judul
-            no_dari_sheet = str(baris.get("No Urut", "")).strip()
-            no_cari = str(no_laporan).strip()
-            if no_dari_sheet == no_cari:
-                nomor_baris = indeks
-                break
-        
-        if not nomor_baris:
-            return False, f"⚠️ Laporan nomor **{no_laporan}** tidak ditemukan"
-        
-        # Daftar status HARUS SAMA PERSIS
-        DAFTAR_STATUS_VALID = [
-            "📥 Baru Dilaporkan",
-            "⚙️ Sedang Dalam Proses Penanganan",
-            "✅ Sesuai Kondisi Penanganan",
-            "❌ Ditunda / Masuk Dalam Rencana Penanganan"
-        ]
-        
-        if status_baru not in DAFTAR_STATUS_VALID:
-            return False, f"⚠️ Status tidak dikenali!"
-        
-        # Cari posisi kolom
-        kolom_status = None
-        kolom_waktu = None
-        daftar_judul = semua_data[0].keys()
-        
-        for nomor_kolom, nama_kolom in enumerate(daftar_judul, start=1):
-            nama = str(nama_kolom).strip().lower()
-            if nama == "status":
-                kolom_status = nomor_kolom
-            if nama in ["terakhir diperbarui", "terakhir_diperbarui"]:
-                kolom_waktu = nomor_kolom
-        
-        if not kolom_status:
-            return False, "⚠️ Kolom 'Status' tidak ditemukan"
-        
-        # Perbarui nilai
-        waktu_sekarang = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        sheet.update_cell(nomor_baris, kolom_status, status_baru)
-        
-        if kolom_waktu:
-            sheet.update_cell(nomor_baris, kolom_waktu, waktu_sekarang)
-        
-        # Hapus cache agar halaman Riwayat langsung segar
-        if "data_sheet_cache" in st.session_state:
-            del st.session_state["data_sheet_cache"]
-        if "waktu_muat_data" in st.session_state:
-            del st.session_state["waktu_muat_data"]
-        
-        return True, f"""✅ **Laporan #{no_laporan} DIPERBARUI!**
-
-Status baru:
-{status_baru}
-
-⏰ Diperbarui: {waktu_sekarang}"""
-    
-    except Exception as e:
-        return False, f"⚠️ Kesalahan: {str(e)}"
-# ==================================================
-# ✅ FUNGSI DIPERBAIKI: BACA DATA DENGAN METODE ALTERNATIF
-# ==================================================
-def proses_perintah_telegram():
-    """Menerima perintah /update dari Telegram — versi pembacaan diperbaiki"""
-    try:
-        import json
-        
-        # ==============================================
-        # 🔑 CARA BARU: BACA DARI VARIABEL LINGKUNGAN / REQUEST
-        # ==============================================
-        body_teks = ""
-        
-        # Coba baca dari request paling dapat diandalkan
-        try:
-            from streamlit.web.server import server_util
-            body_teks = st.context.request_body
-            if isinstance(body_teks, bytes):
-                body_teks = body_teks.decode("utf-8")
-        except:
-            pass
-        
-        # Jika masih kosong → baca dari cara lain
-        if not body_teks or len(body_teks) < 5:
-            try:
-                import sys
-                if hasattr(sys, 'stdin') and not sys.stdin.isatty():
-                    body_teks = sys.stdin.read()
-            except:
-                pass
-        
-        # Jika MASIH kosong → beri tahu (untuk pengecekan)
-        if not body_teks or len(body_teks) < 5:
-            print("⚠️ BODY KOSONG — Telegram mengirim tapi aplikasi tidak bisa membaca!")
-            st.stop()
-        
-        # Parse JSON
-        update = json.loads(body_teks)
         token = st.secrets["TELEGRAM_TOKEN"]
         
-        # Fungsi bantu: Kirim pesan balasan
-        def balas(chat_id, teks, tombol=None):
-            try:
-                kirim_data = {
-                    "chat_id": chat_id,
-                    "text": teks,
-                    "parse_mode": "Markdown"
-                }
-                if tombol:
-                    kirim_data["reply_markup"] = json.dumps(tombol)
-                requests.post(
-                    f"https://api.telegram.org/bot{token}/sendMessage",
-                    data=kirim_data,
-                    timeout=15
-                )
-            except Exception as e:
-                print(f"❌ Gagal mengirim balasan: {e}")
-
-        # Fungsi bantu: Hapus tombol setelah diklik
-        def ganti_pesan(chat_id, pesan_id, teks_baru):
-            try:
-                requests.post(
-                    f"https://api.telegram.org/bot{token}/editMessageText",
-                    data={
-                        "chat_id": chat_id,
-                        "message_id": pesan_id,
-                        "text": teks_baru,
-                        "parse_mode": "Markdown"
-                    },
-                    timeout=15
-                )
-            except Exception as e:
-                print(f"❌ Gagal ganti pesan: {e}")
-
-        # ==============================================
-        # 🔘 TOMBOL STATUS DIKLIK (Callback)
-        # ==============================================
-        if "callback_query" in update:
-            klik = update["callback_query"]
-            chat_id = klik["message"]["chat"]["id"]
-            pesan_id = klik["message"]["message_id"]
-            data_aksi = klik.get("data", "")
-            
-            bagian = data_aksi.split("|")
-            if len(bagian) == 3 and bagian[0] == "update":
-                no_laporan = bagian[1]
-                status_baru = bagian[2]
-                
-                # Perbarui ke Google Sheets
-                berhasil, pesan_hasil = perbarui_status_laporan(no_laporan, status_baru)
-                
-                # Tampilkan hasil & hapus tombol
-                ganti_pesan(chat_id, pesan_id, pesan_hasil)
-                
-                # Konfirmasi ke Telegram
-                requests.post(
-                    f"https://api.telegram.org/bot{token}/answerCallbackQuery",
-                    data={
-                        "callback_query_id": klik["id"],
-                        "text": "✅ Status diperbarui!"
-                    }
-                )
-            st.stop()
-
-        # ==============================================
-        # 📩 PERINTAH TEKS DITERIMA
-        # ==============================================
-        if "message" not in update or "text" not in update["message"]:
+        # Ambil perintah terbaru dari Telegram
+        res = requests.get(
+            f"https://api.telegram.org/bot{token}/getUpdates",
+            params={"offset": -1, "limit": 10, "timeout": 0},
+            timeout=15
+        )
+        
+        if res.status_code != 200:
+            st.error("❌ Gagal ambil perintah dari Telegram")
             st.stop()
         
-        teks = update["message"]["text"].strip()
-        chat_id = update["message"]["chat"]["id"]
-
-        # === PERINTAH /update ===
-        if teks.startswith("/update"):
-            bagian = teks.split(maxsplit=1)
-            
-            if len(bagian) >= 2 and bagian[1].strip():
-                no_laporan = bagian[1].strip()
-                
-                # ✅ Tampilkan TOMBOL PILIHAN STATUS
-                tombol = {
-                    "inline_keyboard": [
-                        [{"text": "📥 Baru Dilaporkan", "callback_data": f"update|{no_laporan}|📥 Baru Dilaporkan"}],
-                        [{"text": "⚙️ Sedang Dalam Proses Penanganan", "callback_data": f"update|{no_laporan}|⚙️ Sedang Dalam Proses Penanganan"}],
-                        [{"text": "✅ Sesuai Kondisi Penanganan", "callback_data": f"update|{no_laporan}|✅ Sesuai Kondisi Penanganan"}],
-                        [{"text": "❌ Ditunda / Masuk Dalam Rencana Penanganan", "callback_data": f"update|{no_laporan}|❌ Ditunda / Masuk Dalam Rencana Penanganan"}]
-                    ]
-                }
-                
-                balas(chat_id, f"""🔧 **Pilih Status untuk Laporan No: {no_laporan}**
-
-👇 Klik salah satu tombol di bawah:""", tombol)
-            
-            else:
-                balas(chat_id, """📋 **Gunakan format:**
-`/update [Nomor Laporan]`
-
-Contoh:
-`/update 52`
-
-> Nanti akan muncul tombol pilihan status, tinggal klik saja!""")
+        data = res.json()
+        if not data.get("ok"):
+            st.error("❌ Balasan Telegram tidak valid")
+            st.stop()
         
-        st.stop()
-    
+        updates = data.get("result", [])
+        perintah_diproses = False
+        
+        for upd in updates:
+            uid = upd.get("update_id")
+            
+            # === TOMBOL STATUS DIKLIK ===
+            if "callback_query" in upd:
+                klik = upd["callback_query"]
+                chat_id_klik = klik["message"]["chat"]["id"]
+                pesan_id = klik["message"]["message_id"]
+                data_aksi = klik.get("data", "")
+                
+                bagian = data_aksi.split("|")
+                if len(bagian) == 3 and bagian[0] == "update":
+                    no_laporan = bagian[1]
+                    status_baru = bagian[2]
+                    
+                    berhasil, pesan_hasil = perbarui_status_laporan(no_laporan, status_baru)
+                    
+                    # Kirim balasan ke Telegram
+                    requests.post(
+                        f"https://api.telegram.org/bot{token}/editMessageText",
+                        data={
+                            "chat_id": chat_id_klik,
+                            "message_id": pesan_id,
+                            "text": pesan_hasil,
+                            "parse_mode": "Markdown"
+                        }
+                    )
+                    requests.post(
+                        f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+                        data={
+                            "callback_query_id": klik["id"],
+                            "text": "✅ Berhasil diperbarui!"
+                        }
+                    )
+                    perintah_diproses = True
+                    # Tandai sudah dibaca
+                    requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": uid + 1})
+            
+            # === PERINTAH /update dikirim ===
+            elif "message" in upd and "text" in upd["message"]:
+                teks = upd["message"]["text"].strip()
+                chat_id = upd["message"]["chat"]["id"]
+                
+                if teks.startswith("/update"):
+                    bagian = teks.split(maxsplit=1)
+                    if len(bagian) >= 2 and bagian[1].strip():
+                        no_laporan = bagian[1].strip()
+                        
+                        tombol = {
+                            "inline_keyboard": [
+                                [{"text": "📥 Baru Dilaporkan", "callback_data": f"update|{no_laporan}|📥 Baru Dilaporkan"}],
+                                [{"text": "⚙️ Sedang Dalam Proses Penanganan", "callback_data": f"update|{no_laporan}|⚙️ Sedang Dalam Proses Penanganan"}],
+                                [{"text": "✅ Sesuai Kondisi Penanganan", "callback_data": f"update|{no_laporan}|✅ Sesuai Kondisi Penanganan"}],
+                                [{"text": "❌ Ditunda / Masuk Dalam Rencana Penanganan", "callback_data": f"update|{no_laporan}|❌ Ditunda / Masuk Dalam Rencana Penanganan"}]
+                            ]
+                        }
+                        
+                        requests.post(
+                            f"https://api.telegram.org/bot{token}/sendMessage",
+                            data={
+                                "chat_id": chat_id,
+                                "text": f"""🔧 **Pilih Status untuk Laporan No: {no_laporan}**
+
+👇 Klik salah satu tombol di bawah:""",
+                                "parse_mode": "Markdown",
+                                "reply_markup": json.dumps(tombol)
+                            }
+                        )
+                        perintah_diproses = True
+                        # Tandai sudah dibaca
+                        requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": uid + 1})
+        
+        if perintah_diproses:
+            st.success("✅ Perintah diproses! Cek di Telegram...")
+        else:
+            st.info("ℹ️ Belum ada perintah baru. Kirim /update [nomor] di Telegram, lalu klik tombol ini lagi.")
+            
     except Exception as e:
-        print(f"❌ KESALAHAN: {str(e)}")
-        st.stop()
-# ==================================================
-# ✅ PEMICU WEBHOOK — BALASAN DIPERBAIKI UNTUK TELEGRAM
-# ==================================================
-if st.query_params.get("webhook") == "telegram":
-    proses_perintah_telegram()
+        st.error(f"⚠️ Kesalahan: {str(e)}")
     
-    # ⚡ BALAS DENGAN 200 OK LANGSUNG ke Telegram — TANPA pengalihan
-    st.markdown("✅ OK", unsafe_allow_html=True)
+    st.markdown("---")
+    if st.button("⬅️ Kembali ke Beranda", type="primary"):
+        st.query_params.clear()
+        st.rerun()
+    
     st.stop()
+
 # --------------------------
 # HALAMAN BERANDA
 # --------------------------
@@ -494,6 +453,11 @@ if st.session_state["halaman_aktif"] == "beranda":
         if st.button("📋 RIWAYAT & STATUS LAPORAN", key="tombol_riwayat", use_container_width=True):
             st.session_state["halaman_aktif"] = "riwayat"
             st.rerun()
+
+    st.markdown("---")
+    if st.button("🔄 PROSES PERINTAH DARI TELEGRAM", type="primary", use_container_width=True):
+        st.query_params["proses_perintah"] = "ya"
+        st.rerun()
 
 # --------------------------
 # HALAMAN LAPORAN
@@ -671,7 +635,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# HALAMAN RIWAYAT & STATUS 
+# HALAMAN RIWAYAT & STATUS
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -681,7 +645,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     st.markdown("<h2 style='color:#fbbf24; margin-bottom:1rem;'>📋 RIWAYAT & STATUS LAPORAN</h2>", unsafe_allow_html=True)
 
-    # 1. Definisi Dialog Pop-up Foto Native
     @st.dialog("📷 Detail Foto Laporan")
     def popup_foto_dialog(no_id, foto_url, ruas_name):
         st.write(f"**Nomor Laporan:** #{no_id}")
@@ -700,14 +663,12 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 del st.query_params["foto_no"]
             st.rerun()
 
-    # 2. Filter Bar
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1: filter_status = st.selectbox("Filter Status", ["Semua", "📥 Baru Dilaporkan", "⚙️ Sedang Dalam Proses Penanganan", "✅ Sesuai Kondisi Penanganan", "❌ Ditunda / Masuk Dalam Rencana Penanganan"])
     with col_f2: filter_ruas = st.selectbox("Filter Ruas", ["Semua"] + [v["nama"] for v in DATA_ATRIBUT.values()])
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
-    # ⚡ Cache diperkecil agar status dari Telegram cepat muncul
-    CACHE_DALAM_DETIK = 5  # Dipercepat dari 60 detik → 5 detik
+    CACHE_DALAM_DETIK = 5
 
     df_laporan = pd.DataFrame()
 
@@ -770,9 +731,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
                 df_tampil = pd.DataFrame(data_tabel)
 
-                # =========================================================
-                # 🎨 TABEL HTML HOVER + LINK QUERY PARAMETERS
-                # =========================================================
                 css_tabel = """<style>
 .tabel-sigap-container {
     width: 100%;
@@ -845,9 +803,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
                 st.markdown(tabel_html, unsafe_allow_html=True)
 
-                # =========================================================
-                # 🔍 CEK JIKA ADA QUERY PARAMETER UNTUK FOTO
-                # =========================================================
                 params = st.query_params
                 if "foto_no" in params:
                     no_terpilih = str(params["foto_no"])
