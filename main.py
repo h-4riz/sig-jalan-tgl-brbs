@@ -248,100 +248,10 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
         return False
 
 # ==================================================
-# ✅ FUNGSI BARU: PEMBARUAN STATUS DARI TELEGRAM
-# ==================================================
-def perbarui_status_laporan(no_laporan, status_baru):
-    """Mencari laporan berdasarkan Nomor Urut & memperbarui statusnya"""
-    if not sheet:
-        return False, "⚠️ Tidak terhubung ke Google Sheets"
-    
-    try:
-        semua_data = sheet.get_all_records()
-        if not semua_data:
-            return False, "⚠️ Belum ada data laporan di Google Sheets"
-        
-        baris_ditemukan = None
-        nomor_baris = None
-        
-        # Cari baris yang nomor urutnya sesuai
-        for indeks, baris in enumerate(semua_data, start=2):  # start=2 karena baris 1 = judul
-            no_dari_sheet = str(baris.get("No Urut", "")).strip()
-            no_cari = str(no_laporan).strip()
-            if no_dari_sheet == no_cari:
-                baris_ditemukan = baris
-                nomor_baris = indeks
-                break
-        
-        if not baris_ditemukan:
-            return False, f"⚠️ Laporan nomor **{no_laporan}** tidak ditemukan"
-        
-        # Daftar status HARUS SAMA PERSIS dengan pilihan filter di halaman Riwayat
-        DAFTAR_STATUS_VALID = [
-            "📥 Baru Dilaporkan",
-            "⚙️ Sedang Dalam Proses Penanganan",
-            "✅ Sesuai Kondisi Penanganan",
-            "❌ Ditunda / Masuk Dalam Rencana Penanganan"
-        ]
-        
-        if status_baru not in DAFTAR_STATUS_VALID:
-            return False, f"""⚠️ Status tidak valid!
-
-Pilih salah satu persis seperti berikut:
-
-📥 Baru Dilaporkan
-⚙️ Sedang Dalam Proses Penanganan
-✅ Sesuai Kondisi Penanganan
-❌ Ditunda / Masuk Dalam Rencana Penanganan
-
-Contoh:
-/update {no_laporan} ⚙️ Sedang Dalam Proses Penanganan"""
-        
-        # Cari posisi kolom Status & Terakhir_Diperbarui
-        kolom_status = None
-        kolom_waktu = None
-        daftar_judul = semua_data[0].keys()
-        
-        for nomor_kolom, nama_kolom in enumerate(daftar_judul, start=1):
-            nama = str(nama_kolom).strip().lower()
-            if nama == "status":
-                kolom_status = nomor_kolom
-            if nama in ["terakhir diperbarui", "terakhir_diperbarui"]:
-                kolom_waktu = nomor_kolom
-        
-        if not kolom_status:
-            return False, "⚠️ Kolom 'Status' tidak ditemukan di Google Sheets"
-        
-        # Perbarui Status
-        waktu_sekarang = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        sheet.update_cell(nomor_baris, kolom_status, status_baru)
-        
-        # Perbarui Waktu Pembaruan
-        if kolom_waktu:
-            sheet.update_cell(nomor_baris, kolom_waktu, waktu_sekarang)
-        
-        # Hapus cache agar halaman Riwayat langsung memuat data baru
-        if "data_sheet_cache" in st.session_state:
-            del st.session_state["data_sheet_cache"]
-        if "waktu_muat_data" in st.session_state:
-            del st.session_state["waktu_muat_data"]
-        
-        return True, f"""✅ **Laporan #{no_laporan} DIPERBARUI!**
-
-Status baru:
-{status_baru}
-
-⏰ Diperbarui: {waktu_sekarang}
-
-> Buka halaman **Riwayat & Status Laporan** untuk melihat perubahannya."""
-    
-    except Exception as e:
-        return False, f"⚠️ Kesalahan: {str(e)}"
-
-# ==================================================
-# ✅ FUNGSI BARU: PENERIMA PERINTAH DARI TELEGRAM
+# ✅ FUNGSI BARU: PENERIMA PERINTAH DARI TELEGRAM + TOMBOL PILIHAN
 # ==================================================
 def proses_perintah_telegram():
-    """Menerima perintah /update dari Telegram via Webhook"""
+    """Menerima perintah /update dari Telegram & tampilkan TOMBOL PILIHAN"""
     try:
         import json
         
@@ -351,86 +261,131 @@ def proses_perintah_telegram():
             return
         
         update = json.loads(body_raw)
-        
-        # Pastikan ada pesan teks
-        if "message" not in update or "text" not in update["message"]:
-            return
-        
-        teks_pesan = update["message"]["text"].strip()
-        chat_id = update["message"]["chat"]["id"]
         token = st.secrets["TELEGRAM_TOKEN"]
         
-        # Fungsi bantu kirim balasan
-        def balas(pesan_teks):
+        # Fungsi bantu kirim pesan
+        def kirim_pesan(chat_id, teks, tombol=None):
             try:
+                data_kirim = {
+                    "chat_id": chat_id,
+                    "text": teks,
+                    "parse_mode": "Markdown"
+                }
+                if tombol:
+                    data_kirim["reply_markup"] = json.dumps(tombol)
+                
                 requests.post(
                     f"https://api.telegram.org/bot{token}/sendMessage",
+                    data=data_kirim,
+                    timeout=15
+                )
+            except Exception as e:
+                pass
+        
+        # Fungsi bantu kirim balasan ke tombol yang diklik
+        def balasan_ke_panggilan(callback_id, teks_balasan):
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/answerCallbackQuery",
                     data={
-                        "chat_id": chat_id,
-                        "text": pesan_teks,
-                        "parse_mode": "Markdown"
+                        "callback_query_id": callback_id,
+                        "text": teks_balasan,
+                        "show_alert": False
                     },
                     timeout=15
                 )
             except:
                 pass
         
+        # Fungsi bantu ubah pesan jadi status terbaru
+        def ubah_pesan_pesan(chat_id, pesan_id, teks_baru):
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/editMessageText",
+                    data={
+                        "chat_id": chat_id,
+                        "message_id": pesan_id,
+                        "text": teks_baru,
+                        "parse_mode": "Markdown",
+                        "reply_markup": json.dumps({})
+                    },
+                    timeout=15
+                )
+            except:
+                pass
+
+        # ==============================================
+        # 🔘 JIKA TOMBOL STATUS DIKLIK (Callback)
+        # ==============================================
+        if "callback_query" in update:
+            panggilan = update["callback_query"]
+            chat_id = panggilan["message"]["chat"]["id"]
+            pesan_id = panggilan["message"]["message_id"]
+            data_klik = panggilan.get("data", "")
+            
+            # Format data: update|NO_LAPORAN|STATUS
+            bagian = data_klik.split("|")
+            if len(bagian) == 3 and bagian[0] == "update":
+                no_laporan = bagian[1]
+                status_baru = bagian[2]
+                
+                # Lakukan pembaruan ke Google Sheets
+                berhasil, pesan_balasan = perbarui_status_laporan(no_laporan, status_baru)
+                
+                # Hapus tombol & tampilkan hasil
+                ubah_pesan_pesan(chat_id, pesan_id, pesan_balasan)
+                balasan_ke_panggilan(panggilan["id"], "✅ Status diperbarui!")
+            return
+
+        # ==============================================
+        # 📩 JIKA ADA PERINTAH TEKS /update
+        # ==============================================
+        if "message" not in update or "text" not in update["message"]:
+            return
+        
+        teks_pesan = update["message"]["text"].strip()
+        chat_id = update["message"]["chat"]["id"]
+        
         # === PERINTAH /update ===
         if teks_pesan.startswith("/update"):
             bagian = teks_pesan.split(maxsplit=2)
             
-            if len(bagian) == 1:
-                # Hanya ketik /update saja
-                balas("""📋 **Perintah Pembaruan Status Laporan**
+            if len(bagian) == 2:
+                # ✅ Hanya nomor laporan → TAMPILKAN TOMBOL PILIHAN STATUS
+                no_laporan = bagian[1]
+                
+                # 🎯 TOMBOL PILIHAN STATUS — persis seperti di gambarmu!
+                tombol_status = {
+                    "inline_keyboard": [
+                        [{"text": "📥 Baru Dilaporkan", "callback_data": f"update|{no_laporan}|📥 Baru Dilaporkan"}],
+                        [{"text": "⚙️ Sedang Dalam Proses Penanganan", "callback_data": f"update|{no_laporan}|⚙️ Sedang Dalam Proses Penanganan"}],
+                        [{"text": "✅ Sesuai Kondisi Penanganan", "callback_data": f"update|{no_laporan}|✅ Sesuai Kondisi Penanganan"}],
+                        [{"text": "❌ Ditunda / Masuk Dalam Rencana Penanganan", "callback_data": f"update|{no_laporan}|❌ Ditunda / Masuk Dalam Rencana Penanganan"}]
+                    ]
+                }
+                
+                pesan_tampil = f"""🔧 **Pilih Status untuk Laporan No: {no_laporan}**
 
-Gunakan format:
-`/update [Nomor Laporan] [Status Baru]`
+👇 Klik salah satu tombol di bawah:"""
+                
+                kirim_pesan(chat_id, pesan_tampil, tombol_status)
+            
+            else:
+                # Panduan penggunaan
+                kirim_pesan(chat_id, """📋 **Cara Menggunakan:**
+
+Ketik perintah:
+`/update [Nomor Laporan]`
 
 Contoh:
-`/update 49 ⚙️ Sedang Dalam Proses Penanganan`
+`/update 39`
 
-Pilihan status yang tersedia:
-📥 Baru Dilaporkan
-⚙️ Sedang Dalam Proses Penanganan
-✅ Sesuai Kondisi Penanganan
-❌ Ditunda / Masuk Dalam Rencana Penanganan""")
-            
-            elif len(bagian) == 2:
-                # Hanya nomor laporan
-                no_laporan = bagian[1]
-                balas(f"""📋 **Laporan Nomor {no_laporan}**
-
-Silakan kirim perintah lengkap dengan status:
-
-`/update {no_laporan} ⚙️ Sedang Dalam Proses Penanganan`
-
-Pilihan status:
-⚙️ Sedang Dalam Proses Penanganan
-✅ Sesuai Kondisi Penanganan
-❌ Ditunda / Masuk Dalam Rencana Penanganan""")
-            
-            elif len(bagian) >= 3:
-                # Lengkap: nomor + status
-                no_laporan = bagian[1]
-                status_baru = bagian[2]
-                berhasil, pesan_balasan = perbarui_status_laporan(no_laporan, status_baru)
-                balas(pesan_balasan)
-        
-        # === PERINTAH /start ===
-        elif teks_pesan.startswith("/start"):
-            balas("""✅ **Bot Pembaruan Status Laporan Aktif!**
-
-Gunakan perintah:
-`/update [Nomor Laporan] [Status Baru]`
-
-Contoh:
-`/update 49 ⚙️ Sedang Dalam Proses Penanganan`""")
+> Nanti akan muncul tombol pilihan status, tinggal klik saja!""")
     
     except Exception as e:
         pass
     
     st.stop()
-
 # ==================================================
 # ✅ CEK JIKA PANGGILAN DARI TELEGRAM WEBHOOK
 # ==================================================
