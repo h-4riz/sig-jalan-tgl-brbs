@@ -20,87 +20,51 @@ WIB = timezone(timedelta(hours=7), name="WIB")
 # --------------------------
 # KONFIGURASI AWAL & PWA
 # --------------------------
+# --------------------------
+# ✅ KONFIGURASI JUDUL & LOGO PWA
+# --------------------------
 st.set_page_config(
     layout="wide",
-    page_title="SIGAP TEGES",
-    page_icon="logo192.jpg",
+    page_title="SIGAP TEGES",  # ✅ Judul di tab browser
+    page_icon="https://cdn-icons-png.flaticon.com/512/1047/1047785.png",  # ✅ Ikon aplikasi
     initial_sidebar_state="collapsed"
 )
 
-# Meta tag untuk PWA & Kustomisasi CSS Utama
+# Meta Tag untuk PWA — Judul & Logo saat dipasang di HP/Desktop
 st.markdown("""
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#023e8a">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <!-- ✅ Judul Aplikasi PWA -->
+    <meta name="application-name" content="SIGAP TEGES">
     <meta name="apple-mobile-web-app-title" content="SIGAP TEGES">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
+    
+    <!-- ✅ Ikon Aplikasi — Saat muncul di layar HP/Desktop -->
+    <link rel="icon" href="./static/logo192.png">
+    <link rel="apple-touch-icon" href="./static/logo192.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="./static/logo192.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="./static/logo512.png">
+    
+    <!-- ✅ Tampilan & Warna Aplikasi -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#023e8a">
+    <meta name="background-color" content="#023e8a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- ✅ File Manifest PWA -->
     <link rel="manifest" href="/manifest.json">
+    
+    <!-- ✅ Hilangkan tulisan "Streamlit" & elemen bawaan Streamlit -->
+    <style>
+        /* Hilangkan menu Streamlit & footer */
+        header, #MainMenu, footer, .stAppToolbar, [data-testid="stToolbar"] { display: none !important; }
+        
+        /* Hilangkan tulisan "Made with Streamlit" di bawah */
+        .st-emotion-cache-164xdfe, .st-emotion-cache-1v0mbdj, footer a { display: none !important; }
+        
+        /* Warna status bar HP */        .stApp { background: linear-gradient(135deg, #023e8a 0%, #0096c7 50%, #90e0ef 100%) !important; }
+    </style>
 </head>
-
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
-    .stApp { 
-        background: linear-gradient(135deg, #023e8a 0%, #0096c7 50%, #90e0ef 100%) !important; 
-        background-attachment: fixed;
-        font-family: 'Inter', sans-serif;
-    }
-    
-    html, body, .stMarkdown, .stText { color: #ffffff !important; }
-    .block-container { padding: 2rem 5% !important; max-width: 1200px; margin: auto; }
-    
-    .card {
-        background: rgba(255, 255, 255, 0.12);
-        backdrop-filter: blur(18px);
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        border-radius: 24px;
-        padding: 2rem;
-        margin-bottom: 2rem;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-    }
-
-    .judul-utama {
-        font-size: 3rem;
-        font-weight: 800;
-        text-align: center;
-        color: #fbbf24;
-        text-shadow: 2px 2px 12px rgba(0,0,0,0.25);
-        margin-bottom: 0.8rem;
-    }
-
-    .sub-judul {
-        font-size: 1.2rem;
-        text-align: center;
-        color: #e0f7ff;
-        margin-bottom: 3rem;
-    }
-    
-    .map-wrapper {
-        border-radius: 24px;
-        overflow: hidden;
-        border: 3px solid rgba(255, 255, 255, 0.4);
-        box-shadow: 0 6px 24px rgba(0,0,0,0.18);
-        margin-bottom: 1.5rem;
-    }
-
-    div[data-testid="stMetric"] {
-        background: rgba(15, 23, 42, 0.35) !important;
-        border-radius: 16px;
-        padding: 1rem !important;
-        border-left: 5px solid #fbbf24 !important;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    }
-    div[data-testid="stMetricLabel"] p { font-size: 1rem !important; font-weight: 600 !important; }
-    div[data-testid="stMetricValue"] { font-size: 1.2rem !important; font-weight: 700 !important; }
-    
-    header, #MainMenu, footer, [data-testid="stSidebar"] { visibility: hidden; }
-</style>
 """, unsafe_allow_html=True)
-
 # --------------------------
 # KONEKSI GOOGLE SHEETS & DATA GEOJSON
 # --------------------------
