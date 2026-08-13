@@ -321,57 +321,65 @@ Status baru:
     except Exception as e:
         return False, f"⚠️ Kesalahan: {str(e)}"
 # ==================================================
-# ✅ FUNGSI BARU: PENERIMA PERINTAH DARI TELEGRAM + TOMBOL PILIHAN
+# ✅ FUNGSI DIPERBAIKI: BACA DATA DENGAN METODE ALTERNATIF
 # ==================================================
 def proses_perintah_telegram():
-    """Menerima perintah /update dari Telegram & tampilkan TOMBOL PILIHAN"""
+    """Menerima perintah /update dari Telegram — versi pembacaan diperbaiki"""
     try:
         import json
         
-        # Baca data yang dikirim Telegram
-        body_raw = st.context.request_body
-        if not body_raw:
+        # ==============================================
+        # 🔑 CARA BARU: BACA DARI VARIABEL LINGKUNGAN / REQUEST
+        # ==============================================
+        body_teks = ""
+        
+        # Coba baca dari request paling dapat diandalkan
+        try:
+            from streamlit.web.server import server_util
+            body_teks = st.context.request_body
+            if isinstance(body_teks, bytes):
+                body_teks = body_teks.decode("utf-8")
+        except:
+            pass
+        
+        # Jika masih kosong → baca dari cara lain
+        if not body_teks or len(body_teks) < 5:
+            try:
+                import sys
+                if hasattr(sys, 'stdin') and not sys.stdin.isatty():
+                    body_teks = sys.stdin.read()
+            except:
+                pass
+        
+        # Jika MASIH kosong → beri tahu (untuk pengecekan)
+        if not body_teks or len(body_teks) < 5:
+            print("⚠️ BODY KOSONG — Telegram mengirim tapi aplikasi tidak bisa membaca!")
             st.stop()
         
-        update = json.loads(body_raw)
+        # Parse JSON
+        update = json.loads(body_teks)
         token = st.secrets["TELEGRAM_TOKEN"]
         
-        # Fungsi bantu kirim pesan
-        def kirim_pesan(chat_id, teks, tombol=None):
+        # Fungsi bantu: Kirim pesan balasan
+        def balas(chat_id, teks, tombol=None):
             try:
-                data_kirim = {
+                kirim_data = {
                     "chat_id": chat_id,
                     "text": teks,
                     "parse_mode": "Markdown"
                 }
                 if tombol:
-                    data_kirim["reply_markup"] = json.dumps(tombol)
-                
+                    kirim_data["reply_markup"] = json.dumps(tombol)
                 requests.post(
                     f"https://api.telegram.org/bot{token}/sendMessage",
-                    data=data_kirim,
+                    data=kirim_data,
                     timeout=15
                 )
             except Exception as e:
-                pass
-        
-        # Fungsi bantu kirim balasan ke tombol yang diklik
-        def balasan_ke_panggilan(callback_id, teks_balasan):
-            try:
-                requests.post(
-                    f"https://api.telegram.org/bot{token}/answerCallbackQuery",
-                    data={
-                        "callback_query_id": callback_id,
-                        "text": teks_balasan,
-                        "show_alert": False
-                    },
-                    timeout=15
-                )
-            except:
-                pass
-        
-        # Fungsi bantu ubah pesan jadi status terbaru
-        def ubah_pesan_pesan(chat_id, pesan_id, teks_baru):
+                print(f"❌ Gagal mengirim balasan: {e}")
+
+        # Fungsi bantu: Hapus tombol setelah diklik
+        def ganti_pesan(chat_id, pesan_id, teks_baru):
             try:
                 requests.post(
                     f"https://api.telegram.org/bot{token}/editMessageText",
@@ -379,56 +387,61 @@ def proses_perintah_telegram():
                         "chat_id": chat_id,
                         "message_id": pesan_id,
                         "text": teks_baru,
-                        "parse_mode": "Markdown",
-                        "reply_markup": json.dumps({})
+                        "parse_mode": "Markdown"
                     },
                     timeout=15
                 )
-            except:
-                pass
+            except Exception as e:
+                print(f"❌ Gagal ganti pesan: {e}")
 
         # ==============================================
-        # 🔘 JIKA TOMBOL STATUS DIKLIK (Callback)
+        # 🔘 TOMBOL STATUS DIKLIK (Callback)
         # ==============================================
         if "callback_query" in update:
-            panggilan = update["callback_query"]
-            chat_id = panggilan["message"]["chat"]["id"]
-            pesan_id = panggilan["message"]["message_id"]
-            data_klik = panggilan.get("data", "")
+            klik = update["callback_query"]
+            chat_id = klik["message"]["chat"]["id"]
+            pesan_id = klik["message"]["message_id"]
+            data_aksi = klik.get("data", "")
             
-            # Format data: update|NO_LAPORAN|STATUS
-            bagian = data_klik.split("|")
+            bagian = data_aksi.split("|")
             if len(bagian) == 3 and bagian[0] == "update":
                 no_laporan = bagian[1]
                 status_baru = bagian[2]
                 
-                # Lakukan pembaruan ke Google Sheets
-                berhasil, pesan_balasan = perbarui_status_laporan(no_laporan, status_baru)
+                # Perbarui ke Google Sheets
+                berhasil, pesan_hasil = perbarui_status_laporan(no_laporan, status_baru)
                 
-                # Hapus tombol & tampilkan hasil
-                ubah_pesan_pesan(chat_id, pesan_id, pesan_balasan)
-                balasan_ke_panggilan(panggilan["id"], "✅ Status diperbarui!")
-            return
+                # Tampilkan hasil & hapus tombol
+                ganti_pesan(chat_id, pesan_id, pesan_hasil)
+                
+                # Konfirmasi ke Telegram
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+                    data={
+                        "callback_query_id": klik["id"],
+                        "text": "✅ Status diperbarui!"
+                    }
+                )
+            st.stop()
 
         # ==============================================
-        # 📩 JIKA ADA PERINTAH TEKS /update
+        # 📩 PERINTAH TEKS DITERIMA
         # ==============================================
         if "message" not in update or "text" not in update["message"]:
-            return
+            st.stop()
         
-        teks_pesan = update["message"]["text"].strip()
+        teks = update["message"]["text"].strip()
         chat_id = update["message"]["chat"]["id"]
-        
+
         # === PERINTAH /update ===
-        if teks_pesan.startswith("/update"):
-            bagian = teks_pesan.split(maxsplit=2)
+        if teks.startswith("/update"):
+            bagian = teks.split(maxsplit=1)
             
-            if len(bagian) == 2:
-                # ✅ Hanya nomor laporan → TAMPILKAN TOMBOL PILIHAN STATUS
-                no_laporan = bagian[1]
+            if len(bagian) >= 2 and bagian[1].strip():
+                no_laporan = bagian[1].strip()
                 
-                # 🎯 TOMBOL PILIHAN STATUS — persis seperti di gambarmu!
-                tombol_status = {
+                # ✅ Tampilkan TOMBOL PILIHAN STATUS
+                tombol = {
                     "inline_keyboard": [
                         [{"text": "📥 Baru Dilaporkan", "callback_data": f"update|{no_laporan}|📥 Baru Dilaporkan"}],
                         [{"text": "⚙️ Sedang Dalam Proses Penanganan", "callback_data": f"update|{no_laporan}|⚙️ Sedang Dalam Proses Penanganan"}],
@@ -437,28 +450,24 @@ def proses_perintah_telegram():
                     ]
                 }
                 
-                pesan_tampil = f"""🔧 **Pilih Status untuk Laporan No: {no_laporan}**
+                balas(chat_id, f"""🔧 **Pilih Status untuk Laporan No: {no_laporan}**
 
-👇 Klik salah satu tombol di bawah:"""
-                
-                kirim_pesan(chat_id, pesan_tampil, tombol_status)
+👇 Klik salah satu tombol di bawah:""", tombol)
             
             else:
-                # Panduan penggunaan
-                kirim_pesan(chat_id, """📋 **Cara Menggunakan:**
-
-Ketik perintah:
+                balas(chat_id, """📋 **Gunakan format:**
 `/update [Nomor Laporan]`
 
 Contoh:
-`/update 39`
+`/update 52`
 
 > Nanti akan muncul tombol pilihan status, tinggal klik saja!""")
+        
+        st.stop()
     
     except Exception as e:
-        pass
-    
-    st.stop()
+        print(f"❌ KESALAHAN: {str(e)}")
+        st.stop()
 # ==================================================
 # ✅ CEK JIKA PANGGILAN DARI TELEGRAM WEBHOOK
 # ==================================================
