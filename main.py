@@ -46,7 +46,7 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
     
-    html, body, .stMarkdown, .stText { color: #gggggg !important; }
+    html, body, .stMarkdown, .stText { color: #ffffff !important; }
     .block-container { padding: 2rem 5% !important; max-width: 1200px; margin: auto; }
     
     .card {
