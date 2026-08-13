@@ -469,11 +469,14 @@ Contoh:
         print(f"❌ KESALAHAN: {str(e)}")
         st.stop()
 # ==================================================
-# ✅ CEK JIKA PANGGILAN DARI TELEGRAM WEBHOOK
+# ✅ PEMICU WEBHOOK — BALASAN DIPERBAIKI UNTUK TELEGRAM
 # ==================================================
 if st.query_params.get("webhook") == "telegram":
     proses_perintah_telegram()
-
+    
+    # ⚡ BALAS DENGAN 200 OK LANGSUNG ke Telegram — TANPA pengalihan
+    st.markdown("✅ OK", unsafe_allow_html=True)
+    st.stop()
 # --------------------------
 # HALAMAN BERANDA
 # --------------------------
