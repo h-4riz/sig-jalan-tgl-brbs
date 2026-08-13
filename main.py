@@ -246,7 +246,80 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
         st.error(f"Gagal menyimpan ke Google Sheets: {str(e)}")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
+# ==================================================
+# ✅ FUNGSI YANG HILANG: PEMBARUAN STATUS KE GOOGLE SHEETS
+# ==================================================
+def perbarui_status_laporan(no_laporan, status_baru):
+    """Mencari laporan berdasarkan Nomor Urut & memperbarui statusnya"""
+    if not sheet:
+        return False, "⚠️ Tidak terhubung ke Google Sheets"
+    
+    try:
+        semua_data = sheet.get_all_records()
+        if not semua_data:
+            return False, "⚠️ Belum ada data laporan di Google Sheets"
+        
+        nomor_baris = None
+        
+        # Cari baris yang nomor urutnya sesuai
+        for indeks, baris in enumerate(semua_data, start=2):  # baris 1 = judul
+            no_dari_sheet = str(baris.get("No Urut", "")).strip()
+            no_cari = str(no_laporan).strip()
+            if no_dari_sheet == no_cari:
+                nomor_baris = indeks
+                break
+        
+        if not nomor_baris:
+            return False, f"⚠️ Laporan nomor **{no_laporan}** tidak ditemukan"
+        
+        # Daftar status HARUS SAMA PERSIS
+        DAFTAR_STATUS_VALID = [
+            "📥 Baru Dilaporkan",
+            "⚙️ Sedang Dalam Proses Penanganan",
+            "✅ Sesuai Kondisi Penanganan",
+            "❌ Ditunda / Masuk Dalam Rencana Penanganan"
+        ]
+        
+        if status_baru not in DAFTAR_STATUS_VALID:
+            return False, f"⚠️ Status tidak dikenali!"
+        
+        # Cari posisi kolom
+        kolom_status = None
+        kolom_waktu = None
+        daftar_judul = semua_data[0].keys()
+        
+        for nomor_kolom, nama_kolom in enumerate(daftar_judul, start=1):
+            nama = str(nama_kolom).strip().lower()
+            if nama == "status":
+                kolom_status = nomor_kolom
+            if nama in ["terakhir diperbarui", "terakhir_diperbarui"]:
+                kolom_waktu = nomor_kolom
+        
+        if not kolom_status:
+            return False, "⚠️ Kolom 'Status' tidak ditemukan"
+        
+        # Perbarui nilai
+        waktu_sekarang = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        sheet.update_cell(nomor_baris, kolom_status, status_baru)
+        
+        if kolom_waktu:
+            sheet.update_cell(nomor_baris, kolom_waktu, waktu_sekarang)
+        
+        # Hapus cache agar halaman Riwayat langsung segar
+        if "data_sheet_cache" in st.session_state:
+            del st.session_state["data_sheet_cache"]
+        if "waktu_muat_data" in st.session_state:
+            del st.session_state["waktu_muat_data"]
+        
+        return True, f"""✅ **Laporan #{no_laporan} DIPERBARUI!**
 
+Status baru:
+{status_baru}
+
+⏰ Diperbarui: {waktu_sekarang}"""
+    
+    except Exception as e:
+        return False, f"⚠️ Kesalahan: {str(e)}"
 # ==================================================
 # ✅ FUNGSI BARU: PENERIMA PERINTAH DARI TELEGRAM + TOMBOL PILIHAN
 # ==================================================
@@ -258,7 +331,7 @@ def proses_perintah_telegram():
         # Baca data yang dikirim Telegram
         body_raw = st.context.request_body
         if not body_raw:
-            return
+            st.stop()
         
         update = json.loads(body_raw)
         token = st.secrets["TELEGRAM_TOKEN"]
