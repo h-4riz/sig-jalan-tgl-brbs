@@ -13,7 +13,10 @@ from PIL import Image
 import io
 import gspread
 from google.oauth2.service_account import Credentials
+from datetime import datetime, timedelta, timezone
 
+# Definisikan Zona Waktu Indonesia Barat (WIB = UTC+7)
+WIB = timezone(timedelta(hours=7), name="WIB")
 # --------------------------
 # KONFIGURASI AWAL & PWA
 # --------------------------
@@ -214,7 +217,7 @@ def perbarui_status_laporan(no_laporan, status_baru):
         if not kolom_status:
             return False, "⚠️ Kolom 'Status' tidak ditemukan"
         
-        waktu_sekarang = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        waktu_sekarang = datetime.datetime.now(WIB).strftime("%d/%m/%Y %H:%M:%S")
         sheet.update_cell(nomor_baris, kolom_status, status_baru)
         
         if kolom_waktu:
@@ -611,7 +614,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
                 if not foto:
                     st.warning("⚠️ Harap ambil foto lokasi terlebih dahulu dengan menekan tombol 'Ambil Foto Lokasi' di atas!")
                 else:
-                    waktu = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    waktu = datetime.datetime.now(WIB).strftime("%d/%m/%Y %H:%M:%S")
                     link_maps = f"https://www.google.com/maps?q={u_lat:.6f},{u_lon:.6f}"
 
                     data_laporan = {
@@ -699,7 +702,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
 
     try:
         if sheet:
-            waktu_sekarang = datetime.datetime.now()
+            waktu_sekarang = datetime.datetime.now(WIB)
             perlu_muat_ulang = True
 
             if ("data_sheet_cache" in st.session_state and "waktu_muat_data" in st.session_state):
@@ -841,7 +844,7 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 st.download_button(
                     label="📥 Unduh Data Laporan (CSV)",
                     data=csv,
-                    file_name=f"laporan_jalan_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    file_name=f"laporan_jalan_{datetime.datetime.now(WIB).strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     use_container_width=True
                 )
