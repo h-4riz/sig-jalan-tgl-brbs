@@ -252,7 +252,7 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
 # --------------------------
 if st.session_state["halaman_aktif"] == "beranda":
     st.markdown("<h1 class='judul-utama'>🛣️ SIGAP TEGES</h1>", unsafe_allow_html=True)
-    st.markdown("<p class='sub-judul'>Sistem Informasi Geografis & Pelaporan Kondisi Jalan Provinsi</p>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-judul'>Sistem Informasi Geografis & Pelaporan Kondisi Jalan Provinsi di Wilayah Kab. Tegal dan Kab. Brebes</p>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2, gap="large")
     with col1:
