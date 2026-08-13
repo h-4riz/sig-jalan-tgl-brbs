@@ -23,47 +23,51 @@ WIB = timezone(timedelta(hours=7), name="WIB")
 # --------------------------
 # ✅ KONFIGURASI JUDUL & LOGO PWA
 # --------------------------
+# --------------------------
+# ✅ KONFIGURASI JUDUL, LOGO & PWA — DIPERBAIKI
+# --------------------------
 st.set_page_config(
+    page_title="SIGAP TEGES",
+    page_icon="https://cdn-icons-png.flaticon.com/512/1047/1047785.png",
     layout="wide",
-    page_title="SIGAP TEGES",  # ✅ Judul di tab browser
-    page_icon="https://cdn-icons-png.flaticon.com/512/1047/1047785.png",  # ✅ Ikon aplikasi
     initial_sidebar_state="collapsed"
 )
 
-# Meta Tag untuk PWA — Judul & Logo saat dipasang di HP/Desktop
+# ⚠️ SEMUA kode HTML HARUS ada DI DALAM tanda petik tiga """ ... """
 st.markdown("""
 <head>
-    <!-- ✅ Judul Aplikasi PWA -->
+    <!-- ✅ Judul Aplikasi -->
     <meta name="application-name" content="SIGAP TEGES">
     <meta name="apple-mobile-web-app-title" content="SIGAP TEGES">
-    
-    <!-- ✅ Ikon Aplikasi — Saat muncul di layar HP/Desktop -->
-    <link rel="icon" href="./static/logo192.png">
-    <link rel="apple-touch-icon" href="./static/logo192.png">
-    <link rel="apple-touch-icon" sizes="192x192" href="./static/logo192.png">
-    <link rel="apple-touch-icon" sizes="512x512" href="./static/logo512.png">
-    
-    <!-- ✅ Tampilan & Warna Aplikasi -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#023e8a">
     <meta name="background-color" content="#023e8a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
-    <!-- ✅ File Manifest PWA -->
-    <link rel="manifest" href="/manifest.json">
+    <!-- ✅ Ikon Aplikasi -->
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
     
-    <!-- ✅ Hilangkan tulisan "Streamlit" & elemen bawaan Streamlit -->
-    <style>
-        /* Hilangkan menu Streamlit & footer */
-        header, #MainMenu, footer, .stAppToolbar, [data-testid="stToolbar"] { display: none !important; }
-        
-        /* Hilangkan tulisan "Made with Streamlit" di bawah */
-        .st-emotion-cache-164xdfe, .st-emotion-cache-1v0mbdj, footer a { display: none !important; }
-        
-        /* Warna status bar HP */        .stApp { background: linear-gradient(135deg, #023e8a 0%, #0096c7 50%, #90e0ef 100%) !important; }
-    </style>
+    <!-- ✅ Manifest PWA -->
+    <link rel="manifest" href="/manifest.json">
 </head>
+
+<style>
+    /* ✅ Hilangkan header Streamlit, menu, footer, dan toolbar */
+    header, #MainMenu, footer, .stAppToolbar, [data-testid="stToolbar"] {
+        display: none !important;
+    }
+    
+    /* ✅ Hilangkan tulisan "Made with Streamlit" di bawah */
+    footer, .st-emotion-cache-164xdfe, .st-emotion-cache-1v0mbdj, footer a {
+        display: none !important;
+    }
+    
+    /* ✅ Latar belakang aplikasi */
+    .stApp {
+        background: linear-gradient(135deg, #023e8a 0%, #0096c7 50%, #90e0ef 100%) !important;
+    }
+</style>
 """, unsafe_allow_html=True)
 # --------------------------
 # KONEKSI GOOGLE SHEETS & DATA GEOJSON
