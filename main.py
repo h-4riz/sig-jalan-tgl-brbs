@@ -322,120 +322,128 @@ def simpan_ke_gsheets(data_baru, foto_url=None):
         return False
 
 # ==================================================
-# ✅ SISTEM BARU: PROSES PERINTAH DARI TELEGRAM (TANPA WEBHOOK)
+# ✅ VERSI OTOMATIS: TUNGGU & PROSES SENDIRI — TANPA KLIK BERULANG
 # ==================================================
-if st.query_params.get("proses_perintah") == "ya":
-    st.title("🔄 Memproses Perintah Telegram...")
+import time
+
+# === Fungsi bantu: Tunggu & ambil perintah baru ===
+def tunggu_ambil_perintah(detik_tunggu=10):
+    """Tunggu sampai ada perintah baru, lalu ambil"""
+    token = st.secrets["TELEGRAM_TOKEN"]
     
-    try:
-        token = st.secrets["TELEGRAM_TOKEN"]
-        
-        # Ambil perintah terbaru dari Telegram
+    # Ambil posisi terakhir dulu
+    awal = requests.get(
+        f"https://api.telegram.org/bot{token}/getUpdates",
+        params={"offset": -1, "limit": 1},
+        timeout=15
+    ).json()
+    id_terakhir = awal["result"][0]["update_id"] if awal.get("result") else 0
+    
+    st.info(f"⏳ Menunggu perintah selama {detik_tunggu} detik...")
+    
+    # Tunggu perintah baru masuk
+    for detik in range(detik_tunggu):
+        time.sleep(1)
         res = requests.get(
             f"https://api.telegram.org/bot{token}/getUpdates",
-            params={"offset": -1, "limit": 10, "timeout": 0},
+            params={"offset": id_terakhir + 1, "limit": 5, "timeout": 0},
             timeout=15
         )
+        if res.status_code == 200:
+            data = res.json()
+            if data.get("ok") and data.get("result"):
+                return data["result"]  # Ada perintah baru!
+    
+    return []  # Habis waktu tunggu, belum ada perintah
+
+# === Pemicu otomatis saat halaman dibuka ===
+perintah_baru = tunggu_ambil_perintah(detik_tunggu=12)  # ⏱️ Tunggu 12 detik
+
+token = st.secrets["TELEGRAM_TOKEN"]
+perintah_diproses = False
+
+for upd in perintah_baru:
+    uid = upd.get("update_id")
+    
+    # === TOMBOL DIKLIK → LANGSUNG DIPROSES ===
+    if "callback_query" in upd:
+        klik = upd["callback_query"]
+        chat_id_klik = klik["message"]["chat"]["id"]
+        pesan_id = klik["message"]["message_id"]
+        data_aksi = klik.get("data", "")
         
-        if res.status_code != 200:
-            st.error("❌ Gagal ambil perintah dari Telegram")
-            st.stop()
-        
-        data = res.json()
-        if not data.get("ok"):
-            st.error("❌ Balasan Telegram tidak valid")
-            st.stop()
-        
-        updates = data.get("result", [])
-        perintah_diproses = False
-        
-        for upd in updates:
-            uid = upd.get("update_id")
+        bagian = data_aksi.split("|")
+        if len(bagian) == 3 and bagian[0] == "update":
+            no_laporan = bagian[1]
+            status_baru = bagian[2]
             
-            # === TOMBOL STATUS DIKLIK ===
-            if "callback_query" in upd:
-                klik = upd["callback_query"]
-                chat_id_klik = klik["message"]["chat"]["id"]
-                pesan_id = klik["message"]["message_id"]
-                data_aksi = klik.get("data", "")
-                
-                bagian = data_aksi.split("|")
-                if len(bagian) == 3 and bagian[0] == "update":
-                    no_laporan = bagian[1]
-                    status_baru = bagian[2]
-                    
-                    berhasil, pesan_hasil = perbarui_status_laporan(no_laporan, status_baru)
-                    
-                    # Kirim balasan ke Telegram
-                    requests.post(
-                        f"https://api.telegram.org/bot{token}/editMessageText",
-                        data={
-                            "chat_id": chat_id_klik,
-                            "message_id": pesan_id,
-                            "text": pesan_hasil,
-                            "parse_mode": "Markdown"
-                        }
-                    )
-                    requests.post(
-                        f"https://api.telegram.org/bot{token}/answerCallbackQuery",
-                        data={
-                            "callback_query_id": klik["id"],
-                            "text": "✅ Berhasil diperbarui!"
-                        }
-                    )
-                    perintah_diproses = True
-                    # Tandai sudah dibaca
-                    requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": uid + 1})
+            berhasil, pesan_hasil = perbarui_status_laporan(no_laporan, status_baru)
             
-            # === PERINTAH /update dikirim ===
-            elif "message" in upd and "text" in upd["message"]:
-                teks = upd["message"]["text"].strip()
-                chat_id = upd["message"]["chat"]["id"]
+            # Balas langsung ke Telegram
+            requests.post(
+                f"https://api.telegram.org/bot{token}/editMessageText",
+                data={
+                    "chat_id": chat_id_klik,
+                    "message_id": pesan_id,
+                    "text": pesan_hasil,
+                    "parse_mode": "Markdown"
+                }
+            )
+            requests.post(
+                f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+                data={
+                    "callback_query_id": klik["id"],
+                    "text": "✅ BERHASIL! Status diperbarui!"
+                }
+            )
+            perintah_diproses = True
+            requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": uid + 1})
+    
+    # === PERINTAH /update DITERIMA ===
+    elif "message" in upd and "text" in upd["message"]:
+        teks = upd["message"]["text"].strip()
+        chat_id = upd["message"]["chat"]["id"]
+        
+        if teks.startswith("/update"):
+            bagian = teks.split(maxsplit=1)
+            if len(bagian) >= 2 and bagian[1].strip():
+                no_laporan = bagian[1].strip()
                 
-                if teks.startswith("/update"):
-                    bagian = teks.split(maxsplit=1)
-                    if len(bagian) >= 2 and bagian[1].strip():
-                        no_laporan = bagian[1].strip()
-                        
-                        tombol = {
-                            "inline_keyboard": [
-                                [{"text": "📥 Baru Dilaporkan", "callback_data": f"update|{no_laporan}|📥 Baru Dilaporkan"}],
-                                [{"text": "⚙️ Sedang Dalam Proses Penanganan", "callback_data": f"update|{no_laporan}|⚙️ Sedang Dalam Proses Penanganan"}],
-                                [{"text": "✅ Sesuai Kondisi Penanganan", "callback_data": f"update|{no_laporan}|✅ Sesuai Kondisi Penanganan"}],
-                                [{"text": "❌ Ditunda / Masuk Dalam Rencana Penanganan", "callback_data": f"update|{no_laporan}|❌ Ditunda / Masuk Dalam Rencana Penanganan"}]
-                            ]
-                        }
-                        
-                        requests.post(
-                            f"https://api.telegram.org/bot{token}/sendMessage",
-                            data={
-                                "chat_id": chat_id,
-                                "text": f"""🔧 **Pilih Status untuk Laporan No: {no_laporan}**
+                tombol = {
+                    "inline_keyboard": [
+                        [{"text": "📥 Baru Dilaporkan", "callback_data": f"update|{no_laporan}|📥 Baru Dilaporkan"}],
+                        [{"text": "⚙️ Sedang Dalam Proses Penanganan", "callback_data": f"update|{no_laporan}|⚙️ Sedang Dalam Proses Penanganan"}],
+                        [{"text": "✅ Sesuai Kondisi Penanganan", "callback_data": f"update|{no_laporan}|✅ Sesuai Kondisi Penanganan"}],
+                        [{"text": "❌ Ditunda / Masuk Dalam Rencana Penanganan", "callback_data": f"update|{no_laporan}|❌ Ditunda / Masuk Dalam Rencana Penanganan"}]
+                    ]
+                }
+                
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    data={
+                        "chat_id": chat_id,
+                        "text": f"""🔧 **Pilih Status untuk Laporan No: {no_laporan}**
 
 👇 Klik salah satu tombol di bawah:""",
-                                "parse_mode": "Markdown",
-                                "reply_markup": json.dumps(tombol)
-                            }
-                        )
-                        perintah_diproses = True
-                        # Tandai sudah dibaca
-                        requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": uid + 1})
-        
-        if perintah_diproses:
-            st.success("✅ Perintah diproses! Cek di Telegram...")
-        else:
-            st.info("ℹ️ Belum ada perintah baru. Kirim /update [nomor] di Telegram, lalu klik tombol ini lagi.")
-            
-    except Exception as e:
-        st.error(f"⚠️ Kesalahan: {str(e)}")
-    
-    st.markdown("---")
-    if st.button("⬅️ Kembali ke Beranda", type="primary"):
-        st.query_params.clear()
-        st.rerun()
-    
-    st.stop()
+                        "parse_mode": "Markdown",
+                        "reply_markup": json.dumps(tombol)
+                    }
+                )
+                perintah_diproses = True
+                requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": uid + 1})
 
+# === Hasil pemrosesan ===
+if perintah_diproses:
+    st.success("✅ Perintah diproses! Cek di Telegram...")
+else:
+    st.info("⏳ Menunggu perintah... Ketik `/update 52` di Telegram lalu tunggu sebentar.")
+
+st.markdown("---")
+if st.button("⬅️ Kembali ke Beranda", type="primary"):
+    st.query_params.clear()
+    st.rerun()
+
+st.stop()
 # --------------------------
 # HALAMAN BERANDA
 # --------------------------
