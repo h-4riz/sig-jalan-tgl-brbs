@@ -17,14 +17,9 @@ from datetime import datetime, timedelta, timezone
 
 # Definisikan Zona Waktu Indonesia Barat (WIB = UTC+7)
 WIB = timezone(timedelta(hours=7), name="WIB")
+
 # --------------------------
-# KONFIGURASI AWAL & PWA
-# --------------------------
-# --------------------------
-# ✅ KONFIGURASI JUDUL & LOGO PWA
-# --------------------------
-# --------------------------
-# ✅ KONFIGURASI JUDUL, LOGO & PWA — DIPERBAIKI
+# ✅ KONFIGURASI JUDUL, LOGO & PWA — BENAR SEKALI
 # --------------------------
 st.set_page_config(
     page_title="SIGAP TEGES",
@@ -33,42 +28,45 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ⚠️ SEMUA kode HTML HARUS ada DI DALAM tanda petik tiga """ ... """
+# ==================================================
+# ⚠️ SEMUA KODE HTML HARUS DI DALAM BLOK INI!
+# JANGAN DIPISAH! SALIN SEKALI SAJA UTUH!
+# ==================================================
 st.markdown("""
 <head>
     <!-- ✅ Judul Aplikasi -->
     <meta name="application-name" content="SIGAP TEGES">
     <meta name="apple-mobile-web-app-title" content="SIGAP TEGES">
     <meta name="theme-color" content="#023e8a">
-    <meta name="background-color" content="#023e8a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    
+
     <!-- ✅ Ikon Aplikasi -->
     <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
-    
+
     <!-- ✅ Manifest PWA -->
     <link rel="manifest" href="/manifest.json">
 </head>
 
 <style>
-    /* ✅ Hilangkan header Streamlit, menu, footer, dan toolbar */
+    /* ✅ Hilangkan menu, header, footer Streamlit */
     header, #MainMenu, footer, .stAppToolbar, [data-testid="stToolbar"] {
         display: none !important;
     }
-    
-    /* ✅ Hilangkan tulisan "Made with Streamlit" di bawah */
-    footer, .st-emotion-cache-164xdfe, .st-emotion-cache-1v0mbdj, footer a {
+    /* ✅ Hilangkan tulisan "Made with Streamlit" */
+    .st-emotion-cache-164xdfe, .st-emotion-cache-1v0mbdj, footer a {
         display: none !important;
     }
-    
     /* ✅ Latar belakang aplikasi */
     .stApp {
         background: linear-gradient(135deg, #023e8a 0%, #0096c7 50%, #90e0ef 100%) !important;
     }
 </style>
 """, unsafe_allow_html=True)
+# ==================================================
+# ⚠️ JANGAN TAMBAHKAN KODE HTML DI LUAR BLOK DI ATAS!
+# ==================================================
 # --------------------------
 # KONEKSI GOOGLE SHEETS & DATA GEOJSON
 # --------------------------
