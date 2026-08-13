@@ -42,8 +42,8 @@ st.markdown("""
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <!-- ✅ Ikon Aplikasi -->
-    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
+    <link rel="icon" href="logo192.jpg">
+    <link rel="apple-touch-icon" href="logo192.jpg">
 
     <!-- ✅ Manifest PWA -->
     <link rel="manifest" href="/manifest.json">
