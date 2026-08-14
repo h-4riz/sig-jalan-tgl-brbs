@@ -27,7 +27,6 @@ st.set_page_config(
 
 # Meta tag untuk PWA & Kustomisasi CSS Utama
 st.markdown("""
-<head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#023e8a">
     <meta name="background-color" content="#023e8a">
@@ -35,11 +34,10 @@ st.markdown("""
     <meta name="apple-mobile-web-app-title" content="SIGAP TEGES">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    
+  
     <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
     <link rel="manifest" href="/manifest.json">
-</head>
 
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -104,6 +102,7 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
 # --------------------------
 # KONEKSI GOOGLE SHEETS & DATA GEOJSON
 # --------------------------
