@@ -111,7 +111,6 @@ if ('serviceWorker' in navigator) {
 }
 </script>
     
-
 </style>
 """, unsafe_allow_html=True)
 # ⚠️ JANGAN PERNAH menulis <link> atau <meta> DI LUAR blok di atas!
@@ -525,19 +524,45 @@ elif st.session_state["halaman_aktif"] == "lapor":
     col1, col2 = st.columns(2)
     with col1: mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
 
+    # ==================================================
+    # ✅ TUNGGU GPS BENAR-BENAR SIAP DULU — BARU TAMPIL PETA
+    # ==================================================
+    u_lat, u_lon = -6.98, 109.13  # Nilai cadangan (Slawi)
+    lokasi_siap = False
+    loc = None
+
     if mode_kerja == "📍 Gunakan GPS Otomatis":
         loc = streamlit_js_eval(
-            js_expressions='new Promise((resolve) => { navigator.geolocation.getCurrentPosition((p) => resolve([p.coords.latitude, p.coords.longitude]), (e) => resolve([-6.98, 109.13]), {enableHighAccuracy:true, timeout:8000}); })',
+            js_expressions='new Promise((resolve) => { navigator.geolocation.getCurrentPosition((p) => resolve([p.coords.latitude, p.coords.longitude]), (e) => resolve([null, null]), {enableHighAccuracy:true, timeout:15000, maximumAge:0}); })',
             key='gps_aktif'
         )
-        u_lat, u_lon = (loc[0], loc[1]) if isinstance(loc, list) else (-6.98, 109.13)
+        
+        # Tunggu sampai GPS BENAR-BENAR mengembalikan angka
+        if isinstance(loc, list) and loc[0] is not None and loc[1] is not None:
+            u_lat = round(loc[0], 6)
+            u_lon = round(loc[1], 6)
+            lokasi_siap = True
+            st.success(f"✅ Lokasi terdeteksi: **{u_lat}, {u_lon}**")
+        else:
+            lokasi_siap = False
+            st.info("⏳ Mendeteksi lokasi GPS... Izinkan akses lokasi & tunggu sebentar!")
+            st.stop()  # ⛔ BERHENTI DI SINI — TUNGGU GPS SIAP
     else:
         u_lat = st.number_input("Garis Lintang (Latitude)", value=-6.98, format="%.6f")
         u_lon = st.number_input("Garis Bujur (Longitude)", value=109.13, format="%.6f")
+        lokasi_siap = True
 
+    # ⛔ JANGAN LANJUT SEBELUM LOKASI SIAP
+    if not lokasi_siap:
+        st.stop()
+
+    # ==================================================
+    # ✅ PROSES KE RUAS JALAN — URUTAN LAT/LON DIPASTIKAN BENAR
+    # ==================================================
     display_lat, display_lon, is_snapped, closest_feature = u_lat, u_lon, False, None
 
     if data_jalan and data_jalan.get("features"):
+        # ⚠️ PENTING: Shapely pakai (LON, LAT) — JANGAN TERBALIK!
         user_point = Point(u_lon, u_lat)
         min_dist = float('inf')
         target_f = None
@@ -547,7 +572,7 @@ elif st.session_state["halaman_aktif"] == "lapor":
                 min_dist, target_f = jarak, f
         if min_dist < 0.3 and target_f:
             p1, _ = nearest_points(shape(target_f['geometry']), user_point)
-            display_lat, display_lon, is_snapped, closest_feature = p1.y, p1.x, True, target_f
+            display_lat, display_lon, is_snapped = p1.y, p1.x, True
 
     id_geo = closest_feature['properties'].get('KML_FOLDER', '-') if closest_feature else "-"
     data_oto = DATA_ATRIBUT.get(id_geo, {"nama": "DI LUAR JANGKAUAN", "no": "-", "km": "-"})
@@ -562,28 +587,43 @@ elif st.session_state["halaman_aktif"] == "lapor":
     with col_m1: st.metric("Nama Ruas", atr['nama'])
     with col_m2: st.metric("Nomor & KM", f"ID {atr['no']} | {atr['km']}")
 
+    # ==================================================
+    # ✅ TAMPIL PETA — SETELAH KOORDINAT PASTI BENAR
+    # ==================================================
     st.markdown("<div class='map-wrapper'>", unsafe_allow_html=True)
     tiles = "OpenStreetMap"
+    attr = "OpenStreetMap"
     if mode_peta == "Satelit":
         tiles = "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
         attr = "Google Maps"
     elif mode_peta == "Gelap":
         tiles = "CartoDB dark_matter"
         attr = "CartoDB"
-    else:
-        attr = "OpenStreetMap"
 
-    m = folium.Map(location=[display_lat, display_lon], zoom_start=17 if is_snapped else 14, tiles=tiles, attr=attr)
+    # 🔍 Zoom dekat langsung ke lokasi
+    zoom_awal = 17 if is_snapped else 16
+
+    m = folium.Map(
+        location=[display_lat, display_lon],  # ⚠️ LAT DULU → LON BELAKANG — JANGAN TERBALIK!
+        zoom_start=zoom_awal,
+        tiles=tiles,
+        attr=attr
+    )
+
     if data_jalan and data_jalan.get("features"):
         folium.GeoJson(data_jalan, style_function=lambda x: {'color': '#fbbf24', 'weight': 5, 'opacity': 0.8}).add_to(m)
+
     folium.Marker(
         [display_lat, display_lon],
         popup=f"Lokasi: {display_lat:.6f}, {display_lon:.6f}",
         icon=folium.Icon(color='orange' if is_snapped else 'red', icon='road', prefix='fa')
     ).add_to(m)
-    st_folium(m, width="100%", height=420, key="peta_utama")
+
+    # ✅ Kunci TETAP → tidak error duplikasi
+    st_folium(m, width="100%", height=420, key="peta_laporan_utama")
     st.markdown("</div>", unsafe_allow_html=True)
 
+    st.info(f"📍 Koordinat: **{display_lat:.6f}, {display_lon:.6f}** {'✅ Disesuaikan ke ruas jalan' if is_snapped else ''}")
     with st.container():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("📝 Isi Laporan Kerusakan")
