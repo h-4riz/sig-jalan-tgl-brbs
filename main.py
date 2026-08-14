@@ -516,94 +516,88 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
     data_jalan = load_data_jalan()
 
-    # ==================================================
-    # ✅ GPS DETEKSI — DIPERBAIKI: Timeout Lebih Lama + Pesan Jelas
-    # ==================================================
-    u_lat, u_lon = -6.98, 109.13  # Nilai cadangan (Slawi)
-    lokasi_siap = False
-    loc = None
+# ==================================================
+# ✅ LANGKAH 1: PILIH CARA LOKASI — DI ATAS SEMUA!
+# ==================================================
+mode_kerja = st.selectbox(
+    "Pilih Cara Pengisian Lokasi",
+    options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
+)
 
-    if mode_kerja == "📍 Gunakan GPS Otomatis":
-        loc = streamlit_js_eval(
-            js_expressions='''
-            new Promise((resolve, reject) => {
-                if (!navigator.geolocation) {
-                    resolve(["BROWSER_TIDAK_DUKUNG", null]);
-                    return;
-                }
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        resolve([pos.coords.latitude, pos.coords.longitude]);
-                    },
-                    (err) => {
-                        let pesan = "ERROR_LAIN";
-                        if (err.code === 1) pesan = "DITOLAK_PENGGUNA";
-                        else if (err.code === 2) pesan = "LOKASI_TIDAK_DITEMUKAN";
-                        else if (err.code === 3) pesan = "TIMEOUT";
-                        resolve([pesan, null]);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 30000,      // ⏱️ DITAMBAH jadi 30 detik
-                        maximumAge: 60000    // Boleh pakai cache 1 menit
-                    }
-                );
-            })
-            ''',
-            key='gps_aktif_v2'  # ⚠️ GANTI nama key agar tidak bentrok!
-        )
+mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
 
-        # ==================================================
-        # ✅ ANALISA HASIL GPS — Beri Pesan Sesuai Masalah
-        # ==================================================
-        if loc is None:
-            st.info("⏳ **Mendeteksi lokasi GPS...** Izinkan akses lokasi di pojok atas browser!")
-            st.warning("💡 Buka di luar ruangan / dekat jendela agar sinyal GPS masuk.")
-            st.stop()
+# ==================================================
+# ✅ LANGKAH 2: BARU BAGIAN DETEKSI GPS
+# ==================================================
+u_lat, u_lon = -6.98, 109.13  # Nilai cadangan (Slawi)
+lokasi_siap = False
+loc = None
 
-        elif isinstance(loc, list):
-            hasil = loc[0]
+if mode_kerja == "📍 Gunakan GPS Otomatis":
+    loc = streamlit_js_eval(
+        js_expressions='''
+        new Promise((resolve) => {
+            if (!navigator.geolocation) {
+                resolve(["BROWSER_TIDAK_DUKUNG", null]);
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    resolve([pos.coords.latitude, pos.coords.longitude]);
+                },
+                (err) => {
+                    let pesan = "ERROR_LAIN";
+                    if (err.code === 1) pesan = "DITOLAK_PENGGUNA";
+                    else if (err.code === 2) pesan = "LOKASI_TIDAK_DITEMUKAN";
+                    else if (err.code === 3) pesan = "TIMEOUT";
+                    resolve([pesan, null]);
+                },
+                { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
+            );
+        })
+        ''',
+        key='gps_aktif_v2'
+    )
 
-            # ✅ BERHASIL dapat koordinat
-            if isinstance(hasil, float) and len(loc) >= 2 and loc[1] is not None:
-                u_lat = round(hasil, 6)
-                u_lon = round(loc[1], 6)
-                lokasi_siap = True
-                st.success(f"✅ **Lokasi terdeteksi!**\n📍 {u_lat}, {u_lon}")
-
-            # ❌ Pengguna TIDAK IZINKAN lokasi
-            elif hasil == "DITOLAK_PENGGUNA":
-                st.error("❌ Akses lokasi DITOLAK. Silakan pilih **✍️ Masukkan Koordinat Secara Manual** di atas, atau izinkan lokasi di pengaturan browser.")
-                st.stop()
-
-            # ❌ Tidak dapat sinyal
-            elif hasil == "LOKASI_TIDAK_DITEMUKAN":
-                st.error("📡 Tidak dapat sinyal lokasi. Coba di luar ruangan atau gunakan **Koordinat Manual**.")
-                st.stop()
-
-            # ❌ Terlalu lama
-            elif hasil == "TIMEOUT":
-                st.error("⏱️ Terlalu lama mendeteksi lokasi. Coba lagi nanti atau gunakan **Koordinat Manual**.")
-                st.stop()
-
-            # ❌ Browser tidak dukung
-            elif hasil == "BROWSER_TIDAK_DUKUNG":
-                st.error("❌ Browser tidak mendukung fitur lokasi. Gunakan browser Chrome / Safari.")
-                st.stop()
-
-            # ⚠️ Hasil lain / belum siap
-            else:
-                st.info("⏳ Masih menunggu sinyal lokasi... Tunggu sebentar lagi!")
-                st.stop()
-    else:
-        # ✅ Mode Manual
-        u_lat = st.number_input("Garis Lintang (Latitude)", value=-6.98, format="%.6f")
-        u_lon = st.number_input("Garis Bujur (Longitude)", value=109.13, format="%.6f")
-        lokasi_siap = True
-
-    # ⛔ JANGAN LANJUT SEBELUM LOKASI BENAR-BENAR SIAP
-    if not lokasi_siap:
+    if loc is None:
+        st.info("⏳ **Mendeteksi lokasi GPS...** Izinkan akses lokasi di pojok atas browser!")
+        st.warning("💡 Buka di luar ruangan / dekat jendela agar sinyal masuk.")
         st.stop()
+
+    elif isinstance(loc, list):
+        hasil = loc[0]
+        if isinstance(hasil, float) and len(loc) >= 2 and loc[1] is not None:
+            u_lat = round(hasil, 6)
+            u_lon = round(loc[1], 6)
+            lokasi_siap = True
+            st.success(f"✅ **Lokasi terdeteksi!**\n📍 {u_lat}, {u_lon}")
+        elif hasil == "DITOLAK_PENGGUNA":
+            st.error("❌ Akses lokasi DITOLAK. Pilih mode **Koordinat Manual** di atas.")
+            st.stop()
+        elif hasil == "LOKASI_TIDAK_DITEMUKAN":
+            st.error("📡 Tidak dapat sinyal lokasi. Gunakan **Koordinat Manual**.")
+            st.stop()
+        elif hasil == "TIMEOUT":
+            st.error("⏱️ Terlalu lama. Coba lagi atau gunakan **Koordinat Manual**.")
+            st.stop()
+        elif hasil == "BROWSER_TIDAK_DUKUNG":
+            st.error("❌ Browser tidak mendukung. Gunakan Chrome / Safari.")
+            st.stop()
+        else:
+            st.info("⏳ Masih menunggu sinyal lokasi...")
+            st.stop()
+else:
+    # ✅ Mode Manual
+    u_lat = st.number_input("Garis Lintang (Latitude)", value=-6.98, format="%.6f")
+    u_lon = st.number_input("Garis Bujur (Longitude)", value=109.13, format="%.6f")
+    lokasi_siap = True
+
+if not lokasi_siap:
+    st.stop()
+
+# ==================================================
+# ✅ LANJUT KE PROSES PETA DAN LAINNYA
+# ==================================================
     with st.container():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("📝 Isi Laporan Kerusakan")
