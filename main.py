@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 # Definisikan Zona Waktu Indonesia Barat (WIB = UTC+7)
 WIB = timezone(timedelta(hours=7), name="WIB")
 # --------------------------
-# ✅ KONFIGURASI AWAL & PWA — LENGKAP
+# ✅ KONFIGURASI AWAL — SALIN UTUH DARI SINI
 # --------------------------
 st.set_page_config(
     page_title="SIGAP TEGES",
@@ -25,19 +25,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Meta tag untuk PWA & Kustomisasi CSS Utama
+# ⚠️ SEMUA kode HTML HARUS DI DALAM blok ini — JANGAN DIPISAH!
 st.markdown("""
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#023e8a">
-    <meta name="background-color" content="#023e8a">
-    <meta name="application-name" content="SIGAP TEGES">
-    <meta name="apple-mobile-web-app-title" content="SIGAP TEGES">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  
-    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
-    <link rel="manifest" href="/manifest.json">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#023e8a">
+<meta name="background-color" content="#023e8a">
+<meta name="application-name" content="SIGAP TEGES">
+<meta name="apple-mobile-web-app-title" content="SIGAP TEGES">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
+<link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
+<link rel="manifest" href="/manifest.json">
 
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -98,11 +98,14 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.2rem !important; font-weight: 700 !important; }
     
     header, #MainMenu, footer, .stAppToolbar, [data-testid="stToolbar"] { 
-        visibility: hidden; display: none !important; 
+        display: none !important; 
     }
 </style>
 """, unsafe_allow_html=True)
-
+# ⚠️ JANGAN PERNAH menulis <link> atau <meta> DI LUAR blok di atas!
+# --------------------------
+# ✅ AKHIR BLOK KONFIGURASI
+# --------------------------
 # --------------------------
 # KONEKSI GOOGLE SHEETS & DATA GEOJSON
 # --------------------------
