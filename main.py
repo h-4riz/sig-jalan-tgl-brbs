@@ -517,75 +517,48 @@ elif st.session_state["halaman_aktif"] == "lapor":
     data_jalan = load_data_jalan()
 
 # ==================================================
-# ✅ LANGKAH 1: PILIH CARA LOKASI — DI ATAS SEMUA!
+# ✅ PILIHAN LOKASI & PETA
 # ==================================================
 mode_kerja = st.selectbox(
     "Pilih Cara Pengisian Lokasi",
     options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
 )
-
 mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
 
 # ==================================================
-# ✅ LANGKAH 2: BARU BAGIAN DETEKSI GPS
+# ✅ DETEKSI GPS — TIDAK MENUMPUK
 # ==================================================
-u_lat, u_lon = -6.98, 109.13  # Nilai cadangan (Slawi)
+u_lat, u_lon = -6.98, 109.13  # Nilai cadangan
 lokasi_siap = False
-loc = None
 
 if mode_kerja == "📍 Gunakan GPS Otomatis":
     loc = streamlit_js_eval(
         js_expressions='''
         new Promise((resolve) => {
-            if (!navigator.geolocation) {
-                resolve(["BROWSER_TIDAK_DUKUNG", null]);
-                return;
-            }
+            if (!navigator.geolocation) { resolve(null); return; }
             navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    resolve([pos.coords.latitude, pos.coords.longitude]);
-                },
-                (err) => {
-                    let pesan = "ERROR_LAIN";
-                    if (err.code === 1) pesan = "DITOLAK_PENGGUNA";
-                    else if (err.code === 2) pesan = "LOKASI_TIDAK_DITEMUKAN";
-                    else if (err.code === 3) pesan = "TIMEOUT";
-                    resolve([pesan, null]);
-                },
-                { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
+                (p) => resolve([p.coords.latitude, p.coords.longitude]),
+                () => resolve(null),
+                {enableHighAccuracy:true, timeout:25000, maximumAge:60000}
             );
         })
         ''',
-        key='gps_aktif_v2'
+        key='gps_aktif_v3'  # ⚠️ GANTI key agar tidak bentrok
     )
 
+    # ✅ HANYA tampil pesan saat belum siap
     if loc is None:
-        st.info("⏳ **Mendeteksi lokasi GPS...** Izinkan akses lokasi di pojok atas browser!")
-        st.warning("💡 Buka di luar ruangan / dekat jendela agar sinyal masuk.")
+        st.info("⏳ Mendeteksi lokasi GPS... Izinkan akses lokasi.")
+        st.caption("💡 Buka di luar ruangan / dekat jendela agar sinyal masuk.")
         st.stop()
+    
+    # ✅ Dapat koordinat
+    if isinstance(loc, list) and len(loc) >= 2 and loc[0] and loc[1]:
+        u_lat = round(loc[0], 6)
+        u_lon = round(loc[1], 6)
+        lokasi_siap = True
+        st.success(f"✅ Lokasi: **{u_lat}, {u_lon}**")
 
-    elif isinstance(loc, list):
-        hasil = loc[0]
-        if isinstance(hasil, float) and len(loc) >= 2 and loc[1] is not None:
-            u_lat = round(hasil, 6)
-            u_lon = round(loc[1], 6)
-            lokasi_siap = True
-            st.success(f"✅ **Lokasi terdeteksi!**\n📍 {u_lat}, {u_lon}")
-        elif hasil == "DITOLAK_PENGGUNA":
-            st.error("❌ Akses lokasi DITOLAK. Pilih mode **Koordinat Manual** di atas.")
-            st.stop()
-        elif hasil == "LOKASI_TIDAK_DITEMUKAN":
-            st.error("📡 Tidak dapat sinyal lokasi. Gunakan **Koordinat Manual**.")
-            st.stop()
-        elif hasil == "TIMEOUT":
-            st.error("⏱️ Terlalu lama. Coba lagi atau gunakan **Koordinat Manual**.")
-            st.stop()
-        elif hasil == "BROWSER_TIDAK_DUKUNG":
-            st.error("❌ Browser tidak mendukung. Gunakan Chrome / Safari.")
-            st.stop()
-        else:
-            st.info("⏳ Masih menunggu sinyal lokasi...")
-            st.stop()
 else:
     # ✅ Mode Manual
     u_lat = st.number_input("Garis Lintang (Latitude)", value=-6.98, format="%.6f")
@@ -596,7 +569,7 @@ if not lokasi_siap:
     st.stop()
 
 # ==================================================
-# ✅ LANJUT KE PROSES PETA DAN LAINNYA
+# ✅ LANJUT KE PETA & PROSES LAINNYA
 # ==================================================
     with st.container():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
