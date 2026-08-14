@@ -100,6 +100,18 @@ st.markdown("""
     header, #MainMenu, footer, .stAppToolbar, [data-testid="stToolbar"] { 
         display: none !important; 
     }
+    <!-- Daftar Service Worker agar PWA terdeteksi browser -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => console.log('✅ Service Worker terdaftar'))
+      .catch(() => console.log('⚠️ Tidak bisa daftar Service Worker'));
+  });
+}
+</script>
+    
+
 </style>
 """, unsafe_allow_html=True)
 # ⚠️ JANGAN PERNAH menulis <link> atau <meta> DI LUAR blok di atas!
