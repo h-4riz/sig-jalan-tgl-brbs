@@ -517,15 +517,6 @@ elif st.session_state["halaman_aktif"] == "lapor":
     data_jalan = load_data_jalan()
 
 # ==================================================
-# ✅ PILIHAN LOKASI & PETA
-# ==================================================
-mode_kerja = st.selectbox(
-    "Pilih Cara Pengisian Lokasi",
-    options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
-)
-mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
-
-# ==================================================
 # ✅ DETEKSI GPS — TIDAK MENUMPUK
 # ==================================================
 u_lat, u_lon = -6.98, 109.13  # Nilai cadangan
