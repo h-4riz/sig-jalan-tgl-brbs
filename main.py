@@ -517,7 +517,20 @@ elif st.session_state["halaman_aktif"] == "lapor":
     data_jalan = load_data_jalan()
 
 # ==================================================
-# ✅ DETEKSI GPS — TIDAK MENUMPUK
+# ✅ DI DALAM HALAMAN: BUAT LAPORAN BARU
+# ==================================================
+st.subheader("📍 Buat Laporan Baru")
+
+# ✅ HANYA muncul di sini — TIDAK di halaman depan
+mode_kerja = st.selectbox(
+    "Pilih Cara Pengisian Lokasi",
+    options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
+)
+
+mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
+
+# ==================================================
+# ✅ DETEKSI GPS — HANYA DI HALAMAN INI
 # ==================================================
 u_lat, u_lon = -6.98, 109.13  # Nilai cadangan
 lokasi_siap = False
@@ -534,16 +547,14 @@ if mode_kerja == "📍 Gunakan GPS Otomatis":
             );
         })
         ''',
-        key='gps_aktif_v3'  # ⚠️ GANTI key agar tidak bentrok
+        key='gps_aktif_v4'
     )
 
-    # ✅ HANYA tampil pesan saat belum siap
     if loc is None:
         st.info("⏳ Mendeteksi lokasi GPS... Izinkan akses lokasi.")
         st.caption("💡 Buka di luar ruangan / dekat jendela agar sinyal masuk.")
         st.stop()
     
-    # ✅ Dapat koordinat
     if isinstance(loc, list) and len(loc) >= 2 and loc[0] and loc[1]:
         u_lat = round(loc[0], 6)
         u_lon = round(loc[1], 6)
@@ -551,7 +562,6 @@ if mode_kerja == "📍 Gunakan GPS Otomatis":
         st.success(f"✅ Lokasi: **{u_lat}, {u_lon}**")
 
 else:
-    # ✅ Mode Manual
     u_lat = st.number_input("Garis Lintang (Latitude)", value=-6.98, format="%.6f")
     u_lon = st.number_input("Garis Bujur (Longitude)", value=109.13, format="%.6f")
     lokasi_siap = True
@@ -559,6 +569,9 @@ else:
 if not lokasi_siap:
     st.stop()
 
+# ==================================================
+# ✅ LANJUT KE PETA & ISI LAPORAN
+# ==================================================
 # ==================================================
 # ✅ LANJUT KE PETA & PROSES LAINNYA
 # ==================================================
