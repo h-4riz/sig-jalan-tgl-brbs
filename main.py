@@ -15,8 +15,9 @@ from datetime import datetime, timedelta, timezone
 
 # Definisikan Zona Waktu Indonesia Barat (WIB = UTC+7)
 WIB = timezone(timedelta(hours=7), name="WIB")
+
 # --------------------------
-# ✅ KONFIGURASI AWAL — SALIN UTUH DARI SINI
+# ✅ KONFIGURASI AWAL
 # --------------------------
 st.set_page_config(
     page_title="SIGAP TEGES",
@@ -25,7 +26,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ⚠️ SEMUA kode HTML HARUS DI DALAM blok ini — JANGAN DIPISAH!
 st.markdown("""
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#023e8a">
@@ -100,23 +100,9 @@ st.markdown("""
     header, #MainMenu, footer, .stAppToolbar, [data-testid="stToolbar"] { 
         display: none !important; 
     }
-    <!-- Daftar Service Worker agar PWA terdeteksi browser -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(() => console.log('✅ Service Worker terdaftar'))
-      .catch(() => console.log('⚠️ Tidak bisa daftar Service Worker'));
-  });
-}
-</script>
-    
 </style>
 """, unsafe_allow_html=True)
-# ⚠️ JANGAN PERNAH menulis <link> atau <meta> DI LUAR blok di atas!
-# --------------------------
-# ✅ AKHIR BLOK KONFIGURASI
-# --------------------------
+
 # --------------------------
 # KONEKSI GOOGLE SHEETS & DATA GEOJSON
 # --------------------------
@@ -141,7 +127,6 @@ def init_gsheets():
 
 @st.cache_data(show_spinner=False)
 def load_data_jalan():
-    """Membaca file GeoJSON spasial ruas jalan."""
     try:
         with open("data_jalan.geojson", "r", encoding="utf-8") as f:
             return json.load(f)
@@ -151,10 +136,9 @@ def load_data_jalan():
 sheet = init_gsheets()
 
 # --------------------------
-# KONTROL NAVIGATION & QUERY PARAMS
+# NAVIGASI
 # --------------------------
 params = st.query_params
-
 if "page" in params:
     st.session_state["halaman_aktif"] = params["page"]
 elif "halaman_aktif" not in st.session_state:
@@ -183,80 +167,58 @@ DATA_ATRIBUT = {
 }
 
 # --------------------------
-# FUNGSI: PERBARUI STATUS LAPORAN
+# FUNGSI PERBARUI STATUS
 # --------------------------
 def perbarui_status_laporan(no_laporan, status_baru):
-    """Mencari laporan berdasarkan Nomor Urut & memperbarui statusnya"""
     if not sheet:
         return False, "⚠️ Tidak terhubung ke Google Sheets"
-    
     try:
         semua_data = sheet.get_all_records()
         if not semua_data:
             return False, "⚠️ Belum ada data laporan di Google Sheets"
-        
         nomor_baris = None
-        
-        # Cari baris yang nomor urutnya sesuai
         for indeks, baris in enumerate(semua_data, start=2):
             no_dari_sheet = str(baris.get("No Urut", "")).strip()
             no_cari = str(no_laporan).strip()
             if no_dari_sheet == no_cari:
                 nomor_baris = indeks
                 break
-        
         if not nomor_baris:
             return False, f"⚠️ Laporan nomor **{no_laporan}** tidak ditemukan"
-        
         DAFTAR_STATUS_VALID = [
             "📥 Baru Dilaporkan",
             "⚙️ Sedang Dalam Proses Penanganan",
             "✅ Sesuai Kondisi Penanganan",
             "❌ Ditunda / Masuk Dalam Rencana Penanganan"
         ]
-        
         if status_baru not in DAFTAR_STATUS_VALID:
             return False, f"⚠️ Status tidak dikenali!"
-        
-        # Cari posisi kolom
         kolom_status = None
         kolom_waktu = None
-        if semua_data:
-            daftar_judul = semua_data[0].keys()
-            for nomor_kolom, nama_kolom in enumerate(daftar_judul, start=1):
-                nama = str(nama_kolom).strip().lower()
-                if nama == "status":
-                    kolom_status = nomor_kolom
-                if nama in ["terakhir diperbarui", "terakhir_diperbarui"]:
-                    kolom_waktu = nomor_kolom
-        
+        daftar_judul = semua_data[0].keys()
+        for nomor_kolom, nama_kolom in enumerate(daftar_judul, start=1):
+            nama = str(nama_kolom).strip().lower()
+            if nama == "status": kolom_status = nomor_kolom
+            if nama in ["terakhir diperbarui", "terakhir_diperbarui"]: kolom_waktu = nomor_kolom
         if not kolom_status:
             return False, "⚠️ Kolom 'Status' tidak ditemukan"
-        
         waktu_sekarang = datetime.now(WIB).strftime("%d/%m/%Y %H:%M:%S")
         sheet.update_cell(nomor_baris, kolom_status, status_baru)
-        
         if kolom_waktu:
             sheet.update_cell(nomor_baris, kolom_waktu, waktu_sekarang)
-        
-        # Hapus cache agar halaman Riwayat langsung segar
-        if "data_sheet_cache" in st.session_state:
-            del st.session_state["data_sheet_cache"]
-        if "waktu_muat_data" in st.session_state:
-            del st.session_state["waktu_muat_data"]
-        
+        if "data_sheet_cache" in st.session_state: del st.session_state["data_sheet_cache"]
+        if "waktu_muat_data" in st.session_state: del st.session_state["waktu_muat_data"]
         return True, f"""✅ **Laporan #{no_laporan} DIPERBARUI!**
 
 Status baru:
 {status_baru}
 
 ⏰ Diperbarui: {waktu_sekarang}"""
-    
     except Exception as e:
         return False, f"⚠️ Kesalahan: {str(e)}"
 
 # --------------------------
-# FUNGSI UTAMA APLIKASI
+# FUNGSI PELAPORAN
 # --------------------------
 def kompresi_foto(file_foto, ukuran_maks=1000):
     try:
@@ -282,12 +244,7 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
         if file_foto:
             foto_terkompres = kompresi_foto(file_foto)
             url = f"https://api.telegram.org/bot{token}/sendPhoto"
-            res = requests.post(
-                url,
-                data={"chat_id": chat_id, "caption": pesan, "parse_mode": "Markdown"},
-                files={'photo': foto_terkompres},
-                timeout=30
-            )
+            res = requests.post(url, data={"chat_id": chat_id, "caption": pesan, "parse_mode": "Markdown"}, files={'photo': foto_terkompres}, timeout=30)
             if res.status_code == 200:
                 hasil = res.json()
                 foto_file_id = hasil["result"]["photo"][-1]["file_id"]
@@ -296,11 +253,7 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
                 return True, foto_url
         else:
             url = f"https://api.telegram.org/bot{token}/sendMessage"
-            res = requests.post(
-                url,
-                data={"chat_id": chat_id, "text": pesan, "parse_mode": "Markdown"},
-                timeout=20
-            )
+            res = requests.post(url, data={"chat_id": chat_id, "text": pesan, "parse_mode": "Markdown"}, timeout=20)
             return res.status_code == 200, None
         return False, None
     except Exception as e:
@@ -309,86 +262,50 @@ def kirim_laporan_lengkap(pesan, file_foto=None):
 
 def simpan_ke_gsheets(data_baru, foto_url=None):
     if not sheet:
-        st.warning("⚠️ Tidak terhubung ke Google Sheets, data disimpan sementara di aplikasi.")
+        st.warning("⚠️ Tidak terhubung ke Google Sheets, data disimpan sementara.")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
     try:
         semua_data = sheet.get_all_records()
         no_urut = len(semua_data) + 1 if semua_data else 1
         url_simpan = f"'{foto_url}" if foto_url else ""
-
         row = [
-            no_urut,
-            data_baru["Waktu"],
-            data_baru["Ruas"],
-            data_baru["No_Ruas"],
-            data_baru["KM"],
-            data_baru["Jenis_Masalah"],
-            data_baru["Keterangan"],
-            data_baru["Status"],
-            data_baru["Terakhir_Diperbarui"],
-            data_baru["Koordinat"],
-            data_baru["Link_Maps"],
-            url_simpan
+            no_urut, data_baru["Waktu"], data_baru["Ruas"], data_baru["No_Ruas"], data_baru["KM"],
+            data_baru["Jenis_Masalah"], data_baru["Keterangan"], data_baru["Status"],
+            data_baru["Terakhir_Diperbarui"], data_baru["Koordinat"], data_baru["Link_Maps"], url_simpan
         ]
-
         sheet.append_row(row, value_input_option="USER_ENTERED")
         data_baru["No_Urut"] = no_urut
         return True
     except Exception as e:
-        st.error(f"Gagal menyimpan ke Google Sheets: {str(e)}")
+        st.error(f"Gagal menyimpan: {str(e)}")
         st.session_state["daftar_laporan"].append(data_baru)
         return False
 
 # ==================================================
-# ✅ SISTEM PALING SEDERHANA: KETIK LANGSUNG DI TELEGRAM
+# ✅ PROSES PERINTAH DARI TELEGRAM
 # ==================================================
 if st.query_params.get("proses_perintah") == "ya":
     st.title("🔄 Memproses Perintah...")
-    
     try:
         token = st.secrets["TELEGRAM_TOKEN"]
-        
-        # Ambil perintah dari Telegram
-        res = requests.get(
-            f"https://api.telegram.org/bot{token}/getUpdates",
-            params={"offset": -1, "limit": 10, "timeout": 0},
-            timeout=15
-        )
-        
-        if res.status_code != 200:
-            st.error("❌ Gagal ambil perintah")
-            st.stop()
-        
+        res = requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": -1, "limit": 10}, timeout=15)
+        if res.status_code != 200: st.error("❌ Gagal ambil perintah"); st.stop()
         data = res.json()
-        if not data.get("ok"):
-            st.error("❌ Balasan tidak valid")
-            st.stop()
-        
+        if not data.get("ok"): st.error("❌ Balasan tidak valid"); st.stop()
         updates = data.get("result", [])
         perintah_diproses = False
         pesan_balasan = ""
-        
         for upd in updates:
             uid = upd.get("update_id")
-            
             if "message" in upd and "text" in upd["message"]:
                 teks = upd["message"]["text"].strip()
                 chat_id = upd["message"]["chat"]["id"]
-                
-                # ======================================
-                # ✅ FORMAT: /update NoLaporan Status
-                # ======================================
-                # Contoh: /update 52 Sesuai Kondisi
-                # ======================================
                 if teks.startswith("/update"):
                     bagian = teks.split(maxsplit=2)
-                    
                     if len(bagian) >= 3:
                         no_laporan = bagian[1].strip()
                         teks_status = bagian[2].strip()
-                        
-                        # Cocokkan teks yang diketik dengan daftar status
                         DAFTAR_STATUS = {
                             "baru": "📥 Baru Dilaporkan",
                             "baru dilaporkan": "📥 Baru Dilaporkan",
@@ -401,29 +318,17 @@ if st.query_params.get("proses_perintah") == "ya":
                             "ditunda": "❌ Ditunda / Masuk Dalam Rencana Penanganan",
                             "rencana": "❌ Ditunda / Masuk Dalam Rencana Penanganan"
                         }
-                        
                         status_dipilih = None
                         for kata_kunci, status_lengkap in DAFTAR_STATUS.items():
                             if kata_kunci in teks_status.lower():
                                 status_dipilih = status_lengkap
                                 break
-                        
                         if status_dipilih:
                             berhasil, pesan_hasil = perbarui_status_laporan(no_laporan, status_dipilih)
-                            
-                            # Kirim balasan ke Telegram
-                            requests.post(
-                                f"https://api.telegram.org/bot{token}/sendMessage",
-                                data={
-                                    "chat_id": chat_id,
-                                    "text": pesan_hasil,
-                                    "parse_mode": "Markdown"
-                                }
-                            )
+                            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", data={"chat_id": chat_id, "text": pesan_hasil, "parse_mode": "Markdown"})
                             pesan_balasan = pesan_hasil
                             perintah_diproses = True
                             requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": uid + 1})
-                        
                         else:
                             pesan_balasan = """⚠️ Format status tidak dikenali!
 
@@ -434,17 +339,9 @@ Gunakan kata kunci berikut:
 → `ditunda` = Ditunda / Masuk Rencana
 
 Contoh: `/update 52 sesuai`"""
-                            requests.post(
-                                f"https://api.telegram.org/bot{token}/sendMessage",
-                                data={
-                                    "chat_id": chat_id,
-                                    "text": pesan_balasan,
-                                    "parse_mode": "Markdown"
-                                }
-                            )
+                            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", data={"chat_id": chat_id, "text": pesan_balasan, "parse_mode": "Markdown"})
                             perintah_diproses = True
                             requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": uid + 1})
-                    
                     else:
                         pesan_balasan = """📋 **Gunakan format:**
 `/update [Nomor] [Status]`
@@ -454,34 +351,24 @@ Contoh:
 `/update 52 proses`
 `/update 52 sesuai`
 `/update 52 ditunda`"""
-                        requests.post(
-                            f"https://api.telegram.org/bot{token}/sendMessage",
-                            data={
-                                "chat_id": chat_id,
-                                "text": pesan_balasan,
-                                "parse_mode": "Markdown"
-                            }
-                        )
+                        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", data={"chat_id": chat_id, "text": pesan_balasan, "parse_mode": "Markdown"})
                         perintah_diproses = True
                         requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"offset": uid + 1})
-        
         if perintah_diproses:
             st.success("✅ Selesai! Cek balasan di Telegram...")
             st.info(pesan_balasan)
         else:
             st.info("ℹ️ Ketik perintah di Telegram, lalu klik tombol ini sekali.")
-            
     except Exception as e:
         st.error(f"⚠️ Kesalahan: {str(e)}")
-    
     st.markdown("---")
     if st.button("⬅️ Kembali ke Beranda", type="primary"):
         st.query_params.clear()
         st.rerun()
-    
     st.stop()
+
 # --------------------------
-# HALAMAN BERANDA
+# ✅ HALAMAN BERANDA
 # --------------------------
 if st.session_state["halaman_aktif"] == "beranda":
     st.markdown("<h1 class='judul-utama'>SIGAP TEGES</h1>", unsafe_allow_html=True)
@@ -504,7 +391,7 @@ if st.session_state["halaman_aktif"] == "beranda":
         st.rerun()
 
 # --------------------------
-# HALAMAN LAPORAN
+# ✅ HALAMAN LAPORAN — LENGKAP
 # --------------------------
 elif st.session_state["halaman_aktif"] == "lapor":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -516,65 +403,105 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
     data_jalan = load_data_jalan()
 
-# ==================================================
-# ✅ DI DALAM HALAMAN: BUAT LAPORAN BARU
-# ==================================================
-st.subheader("📍 Buat Laporan Baru")
-
-# ✅ HANYA muncul di sini — TIDAK di halaman depan
-mode_kerja = st.selectbox(
-    "Pilih Cara Pengisian Lokasi",
-    options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
-)
-
-mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
-
-# ==================================================
-# ✅ DETEKSI GPS — HANYA DI HALAMAN INI
-# ==================================================
-u_lat, u_lon = -6.98, 109.13  # Nilai cadangan
-lokasi_siap = False
-
-if mode_kerja == "📍 Gunakan GPS Otomatis":
-    loc = streamlit_js_eval(
-        js_expressions='''
-        new Promise((resolve) => {
-            if (!navigator.geolocation) { resolve(null); return; }
-            navigator.geolocation.getCurrentPosition(
-                (p) => resolve([p.coords.latitude, p.coords.longitude]),
-                () => resolve(null),
-                {enableHighAccuracy:true, timeout:25000, maximumAge:60000}
-            );
-        })
-        ''',
-        key='gps_aktif_v4'
+    # ✅ PILIHAN LOKASI — HANYA DI HALAMAN INI!
+    mode_kerja = st.selectbox(
+        "Pilih Cara Pengisian Lokasi",
+        options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
     )
+    mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
 
-    if loc is None:
-        st.info("⏳ Mendeteksi lokasi GPS... Izinkan akses lokasi.")
-        st.caption("💡 Buka di luar ruangan / dekat jendela agar sinyal masuk.")
-        st.stop()
-    
-    if isinstance(loc, list) and len(loc) >= 2 and loc[0] and loc[1]:
-        u_lat = round(loc[0], 6)
-        u_lon = round(loc[1], 6)
+    # ✅ DETEKSI GPS
+    u_lat, u_lon = -6.98, 109.13
+    lokasi_siap = False
+    loc = None
+
+    if mode_kerja == "📍 Gunakan GPS Otomatis":
+        loc = streamlit_js_eval(
+            js_expressions='''
+            new Promise((resolve) => {
+                if (!navigator.geolocation) { resolve(null); return; }
+                navigator.geolocation.getCurrentPosition(
+                    (p) => resolve([p.coords.latitude, p.coords.longitude]),
+                    () => resolve(null),
+                    {enableHighAccuracy:true, timeout:25000, maximumAge:60000}
+                );
+            })
+            ''',
+            key='gps_aktif_v4'
+        )
+
+        if loc is None:
+            st.info("⏳ Mendeteksi lokasi GPS... Izinkan akses lokasi.")
+            st.caption("💡 Buka di luar ruangan / dekat jendela agar sinyal masuk.")
+            st.stop()
+        
+        if isinstance(loc, list) and len(loc) >= 2 and loc[0] and loc[1]:
+            u_lat = round(loc[0], 6)
+            u_lon = round(loc[1], 6)
+            lokasi_siap = True
+            st.success(f"✅ Lokasi: **{u_lat}, {u_lon}**")
+    else:
+        u_lat = st.number_input("Garis Lintang (Latitude)", value=-6.98, format="%.6f")
+        u_lon = st.number_input("Garis Bujur (Longitude)", value=109.13, format="%.6f")
         lokasi_siap = True
-        st.success(f"✅ Lokasi: **{u_lat}, {u_lon}**")
 
-else:
-    u_lat = st.number_input("Garis Lintang (Latitude)", value=-6.98, format="%.6f")
-    u_lon = st.number_input("Garis Bujur (Longitude)", value=109.13, format="%.6f")
-    lokasi_siap = True
+    if not lokasi_siap:
+        st.stop()
 
-if not lokasi_siap:
-    st.stop()
+    # ✅ PROSES KE RUAS JALAN
+    display_lat, display_lon, is_snapped, closest_feature = u_lat, u_lon, False, None
+    if data_jalan and data_jalan.get("features"):
+        user_point = Point(u_lon, u_lat)
+        min_dist = float('inf')
+        target_f = None
+        for f in data_jalan['features']:
+            jarak = shape(f['geometry']).distance(user_point) * 111.32
+            if jarak < min_dist:
+                min_dist, target_f = jarak, f
+        if min_dist < 0.3 and target_f:
+            p1, _ = nearest_points(shape(target_f['geometry']), user_point)
+            display_lat, display_lon, is_snapped = p1.y, p1.x, True
+            closest_feature = target_f
 
-# ==================================================
-# ✅ LANJUT KE PETA & ISI LAPORAN
-# ==================================================
-# ==================================================
-# ✅ LANJUT KE PETA & PROSES LAINNYA
-# ==================================================
+    id_geo = closest_feature['properties'].get('KML_FOLDER', '-') if closest_feature else "-"
+    data_oto = DATA_ATRIBUT.get(id_geo, {"nama": "DI LUAR JANGKAUAN", "no": "-", "km": "-"})
+
+    daftar_nama = [v['nama'] for v in DATA_ATRIBUT.values()]
+    idx_def = daftar_nama.index(data_oto['nama']) if data_oto['nama'] in daftar_nama else 0
+    ruas_pilih = st.selectbox("Konfirmasi / Pilih Ruas Jalan", options=daftar_nama, index=idx_def)
+    id_final = next((k for k, v in DATA_ATRIBUT.items() if v["nama"] == ruas_pilih), "Jalan Provinsi_1")
+    atr = DATA_ATRIBUT[id_final]
+
+    col_m1, col_m2 = st.columns(2)
+    with col_m1: st.metric("Nama Ruas", atr['nama'])
+    with col_m2: st.metric("Nomor & KM", f"ID {atr['no']} | {atr['km']}")
+
+    # ✅ TAMPIL PETA
+    st.markdown("<div class='map-wrapper'>", unsafe_allow_html=True)
+    tiles = "OpenStreetMap"
+    attr = "OpenStreetMap"
+    if mode_peta == "Satelit":
+        tiles = "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+        attr = "Google Maps"
+    elif mode_peta == "Gelap":
+        tiles = "CartoDB dark_matter"
+        attr = "CartoDB"
+
+    zoom_awal = 17 if is_snapped else 16
+    m = folium.Map(location=[display_lat, display_lon], zoom_start=zoom_awal, tiles=tiles, attr=attr)
+    if data_jalan and data_jalan.get("features"):
+        folium.GeoJson(data_jalan, style_function=lambda x: {'color': '#fbbf24', 'weight': 5, 'opacity': 0.8}).add_to(m)
+    folium.Marker(
+        [display_lat, display_lon],
+        popup=f"Lokasi: {display_lat:.6f}, {display_lon:.6f}",
+        icon=folium.Icon(color='orange' if is_snapped else 'red', icon='road', prefix='fa')
+    ).add_to(m)
+    st_folium(m, width="100%", height=420, key="peta_laporan")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.info(f"📍 Koordinat: **{display_lat:.6f}, {display_lon:.6f}** {'✅ Disesuaikan ke ruas jalan' if is_snapped else ''}")
+
+    # ✅ FORM LAPORAN
     with st.container():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("📝 Isi Laporan Kerusakan")
@@ -597,30 +524,25 @@ if not lokasi_siap:
         with st.form("form_laporan", clear_on_submit=True):
             tipe_masalah = st.selectbox(
                 "Jenis Masalah",
-                [
-                    "Lubang Jalan", "Jalan Amblas", "Kerusakan Bahu Jalan",
-                    "Drainase/Gorong-gorong Rusak", "Bencana Alam",
-                    "Rambu Lalu Lintas Hilang/Rusak", "Pagar Pengaman Rusak",
-                    "Tanah Longsor", "Genangan Air", "Lainnya"
-                ]
+                ["Lubang Jalan", "Jalan Amblas", "Kerusakan Bahu Jalan",
+                 "Drainase/Gorong-gorong Rusak", "Bencana Alam",
+                 "Rambu Lalu Lintas Hilang/Rusak", "Pagar Pengaman Rusak",
+                 "Tanah Longsor", "Genangan Air", "Lainnya"]
             )
             keterangan = st.text_area(
                 "Keterangan Tambahan",
-                placeholder="Jelaskan kondisi kerusakan, ukuran, atau hal lain yang perlu diketahui...",
+                placeholder="Jelaskan kondisi kerusakan, ukuran, atau hal lain...",
                 max_chars=300
             )
-
             st.markdown("<br>", unsafe_allow_html=True)
 
             kirim, reset = st.columns(2)
-            with kirim:
-                tombol_kirim = st.form_submit_button("✅ KIRIM LAPORAN", use_container_width=True, type="primary")
-            with reset:
-                tombol_reset = st.form_submit_button("🔄 BATAL", use_container_width=True)
+            with kirim: tombol_kirim = st.form_submit_button("✅ KIRIM LAPORAN", use_container_width=True, type="primary")
+            with reset: tombol_reset = st.form_submit_button("🔄 BATAL", use_container_width=True)
 
             if tombol_kirim:
                 if not foto:
-                    st.warning("⚠️ Harap ambil foto lokasi terlebih dahulu dengan menekan tombol 'Ambil Foto Lokasi' di atas!")
+                    st.warning("⚠️ Harap ambil foto lokasi terlebih dahulu!")
                 else:
                     waktu = datetime.now(WIB).strftime("%d/%m/%Y %H:%M:%S")
                     link_maps = f"https://www.google.com/maps?q={u_lat:.6f},{u_lon:.6f}"
@@ -662,7 +584,7 @@ if not lokasi_siap:
                             st.balloons()
                             st.session_state["kamera_aktif"] = False
                         else:
-                            st.warning("⚠️ Laporan terkirim, tersimpan sementara. Akan disinkronkan nanti.")
+                            st.warning("⚠️ Laporan terkirim, tersimpan sementara.")
 
             if tombol_reset:
                 st.session_state["kamera_aktif"] = False
@@ -671,7 +593,7 @@ if not lokasi_siap:
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------
-# HALAMAN RIWAYAT & STATUS
+# ✅ HALAMAN RIWAYAT — TANPA GPS!
 # --------------------------
 elif st.session_state["halaman_aktif"] == "riwayat":
     if st.button("⬅️ Kembali ke Beranda"):
@@ -690,13 +612,11 @@ elif st.session_state["halaman_aktif"] == "riwayat":
             st.image(foto_url, caption=f"Foto Laporan #{no_id}", use_container_width=True)
             st.markdown(f"[🔗 Buka Ukuran Penuh]({foto_url})")
         else:
-            st.warning("⚠️ Tidak ada foto lampiran untuk laporan ini.")
-        
+            st.warning("⚠️ Tidak ada foto lampiran.")
         st.write("")
         if st.button("✕ Tutup ", type="primary", use_container_width=True):
             st.query_params["page"] = "riwayat"
-            if "foto_no" in st.query_params:
-                del st.query_params["foto_no"]
+            if "foto_no" in st.query_params: del st.query_params["foto_no"]
             st.rerun()
 
     col_f1, col_f2, col_f3 = st.columns(3)
@@ -705,29 +625,22 @@ elif st.session_state["halaman_aktif"] == "riwayat":
     with col_f3: cari = st.text_input("Cari Kata Kunci", placeholder="Nomor / Nama jalan / jenis masalah...")
 
     CACHE_DALAM_DETIK = 5
-
     df_laporan = pd.DataFrame()
 
     try:
         if sheet:
             waktu_sekarang = datetime.now(WIB)
             perlu_muat_ulang = True
-
             if ("data_sheet_cache" in st.session_state and "waktu_muat_data" in st.session_state):
                 selisih = (waktu_sekarang - st.session_state["waktu_muat_data"]).total_seconds()
                 if selisih < CACHE_DALAM_DETIK:
                     perlu_muat_ulang = False
-
             if perlu_muat_ulang:
-                try:
-                    data = sheet.get_all_records()
-                    st.session_state["data_sheet_cache"] = data
-                    st.session_state["waktu_muat_data"] = waktu_sekarang
-                except Exception as api_err:
-                    data = st.session_state.get("data_sheet_cache", [])
+                data = sheet.get_all_records()
+                st.session_state["data_sheet_cache"] = data
+                st.session_state["waktu_muat_data"] = waktu_sekarang
             else:
                 data = st.session_state["data_sheet_cache"]
-
             df_laporan = pd.DataFrame(data)
         else:
             df_laporan = pd.DataFrame(st.session_state.get("daftar_laporan", []))
@@ -753,10 +666,8 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 for _, row in df_laporan.iterrows():
                     no_urut = row.get("No Urut", "-")
                     foto_url = str(row.get("Foto_URL", "")).strip().lstrip("'")
-                    
                     foto_map[str(no_urut)] = foto_url
                     ruas_map[str(no_urut)] = row.get("Ruas", "-")
-                    
                     data_tabel.append({
                         "No": no_urut,
                         "Waktu Lapor": row.get("Waktu", "-"),
@@ -768,75 +679,29 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 df_tampil = pd.DataFrame(data_tabel)
 
                 css_tabel = """<style>
-.tabel-sigap-container {
-    width: 100%;
-    overflow-x: auto;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-    background: #ffffff;
-    margin-bottom: 1rem;
-}
-.tabel-sigap {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.95rem;
-    color: #1e293b;
-}
-.tabel-sigap th {
-    background-color: #f8fafc;
-    color: #475569;
-    font-weight: 700;
-    padding: 14px 16px;
-    text-align: left;
-    border-bottom: 2px solid #e2e8f0;
-}
-.tabel-sigap td {
-    padding: 12px 16px;
-    border-bottom: 1px solid #f1f5f9;
-    transition: all 0.2s ease-in-out;
-}
-.tabel-sigap tbody tr td:nth-child(1):hover { background-color: #fef08a !important; color: #854d0e !important; font-weight: bold; }
-.tabel-sigap tbody tr td:nth-child(2):hover { background-color: #bfdbfe !important; color: #1e40af !important; font-weight: bold; }
-.tabel-sigap tbody tr td:nth-child(3):hover { background-color: #bbf7d0 !important; color: #166534 !important; font-weight: bold; }
-.tabel-sigap tbody tr td:nth-child(4):hover { background-color: #e9d5ff !important; color: #6b21a8 !important; font-weight: bold; }
-.tabel-sigap tbody tr td:nth-child(5):hover { background-color: #fbcfe8 !important; color: #9d174d !important; font-weight: bold; }
-.tabel-sigap tbody tr:hover { background-color: #f8fafc; }
-.btn-foto-tabel {
-    background: #22c55e;
-    color: white !important;
-    padding: 6px 12px;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 0.85rem;
-    display: inline-block;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-.btn-foto-tabel:hover {
-    background: #16a34a;
-    transform: translateY(-1px);
-}
+.tabel-sigap-container {width:100%;overflow-x:auto;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.2);background:#ffffff;margin-bottom:1rem;}
+.tabel-sigap {width:100%;border-collapse:collapse;font-family:'Inter',sans-serif;font-size:0.95rem;color:#1e293b;}
+.tabel-sigap th {background-color:#f8fafc;color:#475569;font-weight:700;padding:14px 16px;text-align:left;border-bottom:2px solid #e2e8f0;}
+.tabel-sigap td {padding:12px 16px;border-bottom:1px solid #f1f5f9;transition:all 0.2s ease;}
+.tabel-sigap tbody tr:hover {background-color:#f8fafc;}
+.btn-foto-tabel {background:#22c55e;color:white !important;padding:6px 12px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.85rem;display:inline-block;}
+.btn-foto-tabel:hover {background:#16a34a;}
 </style>"""
 
                 html_rows = ""
-                for idx, row in df_tampil.iterrows():
+                for _, row in df_tampil.iterrows():
                     no_val = row["No"]
                     waktu_val = row["Waktu Lapor"]
                     ruas_val = row["Nama Ruas"]
                     status_val = row["Status Laporan"]
                     foto_url = foto_map.get(str(no_val), "")
-
                     if foto_url and foto_url.startswith("https://"):
                         tombol_foto = f'<a href="?page=riwayat&foto_no={no_val}" target="_self" class="btn-foto-tabel">🖼️ Ada Foto</a>'
                     else:
                         tombol_foto = '<span style="color:#94a3b8;">—</span>'
+                    html_rows += f'<tr><td style="text-align:center;font-weight:600;">{no_val}</td><td>{waktu_val}</td><td>{ruas_val}</td><td>{status_val}</td><td style="text-align:center;">{tombol_foto}</td></tr>'
 
-                    html_rows += f'<tr><td style="text-align: center; font-weight: 600;">{no_val}</td><td>{waktu_val}</td><td>{ruas_val}</td><td>{status_val}</td><td style="text-align: center;">{tombol_foto}</td></tr>'
-
-                tabel_html = f'{css_tabel}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align: center; width: 60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align: center; width: 130px;">Lihat Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
-
+                tabel_html = f'{css_tabel}<div class="tabel-sigap-container"><table class="tabel-sigap"><thead><tr><th style="text-align:center;width:60px;">No</th><th>Waktu Lapor</th><th>Nama Ruas</th><th>Status Laporan</th><th style="text-align:center;width:130px;">Lihat Foto</th></tr></thead><tbody>{html_rows}</tbody></table></div>'
                 st.markdown(tabel_html, unsafe_allow_html=True)
 
                 params = st.query_params
@@ -847,7 +712,6 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                     popup_foto_dialog(no_terpilih, url_terpilih, ruas_terpilih)
 
                 st.markdown("<br>", unsafe_allow_html=True)
-
                 csv = df_laporan.to_csv(index=False).encode("utf-8")
                 st.download_button(
                     label="📥 Unduh Data Laporan (CSV)",
@@ -860,6 +724,5 @@ elif st.session_state["halaman_aktif"] == "riwayat":
                 st.info("ℹ️ Tidak ada laporan yang sesuai dengan filter.")
         else:
             st.info("ℹ️ Belum ada laporan yang dikirim.")
-
     except Exception as e:
         st.error(f"⚠️ Terjadi kesalahan: {str(e)}")
