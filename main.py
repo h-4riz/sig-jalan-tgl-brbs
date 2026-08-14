@@ -17,9 +17,8 @@ from datetime import datetime, timedelta, timezone
 
 # Definisikan Zona Waktu Indonesia Barat (WIB = UTC+7)
 WIB = timezone(timedelta(hours=7), name="WIB")
-
 # --------------------------
-# ✅ KONFIGURASI JUDUL, LOGO & PWA — BENAR SEKALI
+# ✅ KONFIGURASI AWAL & PWA — LENGKAP
 # --------------------------
 st.set_page_config(
     page_title="SIGAP TEGES",
@@ -28,40 +27,85 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ==================================================
-# ⚠️ SEMUA KODE HTML HARUS DI DALAM BLOK INI!
-# JANGAN DIPISAH! SALIN SEKALI SAJA UTUH!
-# ==================================================
+# Meta tag untuk PWA & Kustomisasi CSS Utama
 st.markdown("""
 <head>
-    <!-- ✅ Judul Aplikasi -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#023e8a">
+    <meta name="background-color" content="#023e8a">
     <meta name="application-name" content="SIGAP TEGES">
     <meta name="apple-mobile-web-app-title" content="SIGAP TEGES">
-    <meta name="theme-color" content="#023e8a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-
+    
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1047/1047785.png">
+    <link rel="manifest" href="/manifest.json">
 </head>
 
 <style>
-    /* ✅ Hilangkan menu, header, footer Streamlit */
-    header, #MainMenu, footer, .stAppToolbar, [data-testid="stToolbar"] {
-        display: none !important;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    .stApp { 
+        background: linear-gradient(135deg, #023e8a 0%, #0096c7 50%, #90e0ef 100%) !important; 
+        background-attachment: fixed;
+        font-family: 'Inter', sans-serif;
     }
-    /* ✅ Hilangkan tulisan "Made with Streamlit" */
-    .st-emotion-cache-164xdfe, .st-emotion-cache-1v0mbdj, footer a {
-        display: none !important;
+    
+    html, body, .stMarkdown, .stText { color: #ffffff !important; }
+    .block-container { padding: 2rem 5% !important; max-width: 1200px; margin: auto; }
+    
+    .card {
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(18px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 24px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
     }
-    /* ✅ Latar belakang aplikasi */
-    .stApp {
-        background: linear-gradient(135deg, #023e8a 0%, #0096c7 50%, #90e0ef 100%) !important;
+
+    .judul-utama {
+        font-size: 3rem;
+        font-weight: 800;
+        text-align: center;
+        color: #fbbf24;
+        text-shadow: 2px 2px 12px rgba(0,0,0,0.25);
+        margin-bottom: 0.8rem;
+    }
+
+    .sub-judul {
+        font-size: 1.2rem;
+        text-align: center;
+        color: #e0f7ff;
+        margin-bottom: 3rem;
+    }
+    
+    .map-wrapper {
+        border-radius: 24px;
+        overflow: hidden;
+        border: 3px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+        margin-bottom: 1.5rem;
+    }
+
+    div[data-testid="stMetric"] {
+        background: rgba(15, 23, 42, 0.35) !important;
+        border-radius: 16px;
+        padding: 1rem !important;
+        border-left: 5px solid #fbbf24 !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    div[data-testid="stMetricLabel"] p { font-size: 1rem !important; font-weight: 600 !important; }
+    div[data-testid="stMetricValue"] { font-size: 1.2rem !important; font-weight: 700 !important; }
+    
+    header, #MainMenu, footer, .stAppToolbar, [data-testid="stToolbar"] { 
+        visibility: hidden; display: none !important; 
     }
 </style>
 """, unsafe_allow_html=True)
-# ==================================================
-# ⚠️ JANGAN TAMBAHKAN KODE HTML DI LUAR BLOK DI ATAS!
-# ==================================================
 # --------------------------
 # KONEKSI GOOGLE SHEETS & DATA GEOJSON
 # --------------------------
