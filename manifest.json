@@ -9,12 +9,12 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "static/logo192.png",
+      "src": "static/logo192.jpg",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "static/logo512.png",
+      "src": "static/logo512.jpg",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any maskable"
