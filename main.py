@@ -3,7 +3,6 @@ import folium
 from streamlit_folium import st_folium
 import json
 import pandas as pd
-import datetime
 import time
 from shapely.geometry import shape, Point
 from shapely.ops import nearest_points
