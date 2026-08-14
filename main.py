@@ -516,16 +516,8 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
     data_jalan = load_data_jalan()
 
-    mode_kerja = st.selectbox(
-        "Pilih Cara Pengisian Lokasi",
-        options=["📍 Gunakan GPS Otomatis", "✍️ Masukkan Koordinat Secara Manual"]
-    )
-
-    col1, col2 = st.columns(2)
-    with col1: mode_peta = st.selectbox("Jenis Tampilan Peta", ["Jalan", "Satelit", "Gelap"])
-
     # ==================================================
-    # ✅ TUNGGU GPS BENAR-BENAR SIAP DULU — BARU TAMPIL PETA
+    # ✅ GPS DETEKSI — DIPERBAIKI: Timeout Lebih Lama + Pesan Jelas
     # ==================================================
     u_lat, u_lon = -6.98, 109.13  # Nilai cadangan (Slawi)
     lokasi_siap = False
@@ -533,97 +525,85 @@ elif st.session_state["halaman_aktif"] == "lapor":
 
     if mode_kerja == "📍 Gunakan GPS Otomatis":
         loc = streamlit_js_eval(
-            js_expressions='new Promise((resolve) => { navigator.geolocation.getCurrentPosition((p) => resolve([p.coords.latitude, p.coords.longitude]), (e) => resolve([null, null]), {enableHighAccuracy:true, timeout:15000, maximumAge:0}); })',
-            key='gps_aktif'
+            js_expressions='''
+            new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    resolve(["BROWSER_TIDAK_DUKUNG", null]);
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        resolve([pos.coords.latitude, pos.coords.longitude]);
+                    },
+                    (err) => {
+                        let pesan = "ERROR_LAIN";
+                        if (err.code === 1) pesan = "DITOLAK_PENGGUNA";
+                        else if (err.code === 2) pesan = "LOKASI_TIDAK_DITEMUKAN";
+                        else if (err.code === 3) pesan = "TIMEOUT";
+                        resolve([pesan, null]);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 30000,      // ⏱️ DITAMBAH jadi 30 detik
+                        maximumAge: 60000    // Boleh pakai cache 1 menit
+                    }
+                );
+            })
+            ''',
+            key='gps_aktif_v2'  # ⚠️ GANTI nama key agar tidak bentrok!
         )
-        
-        # Tunggu sampai GPS BENAR-BENAR mengembalikan angka
-        if isinstance(loc, list) and loc[0] is not None and loc[1] is not None:
-            u_lat = round(loc[0], 6)
-            u_lon = round(loc[1], 6)
-            lokasi_siap = True
-            st.success(f"✅ Lokasi terdeteksi: **{u_lat}, {u_lon}**")
-        else:
-            lokasi_siap = False
-            st.info("⏳ Mendeteksi lokasi GPS... Izinkan akses lokasi & tunggu sebentar!")
-            st.stop()  # ⛔ BERHENTI DI SINI — TUNGGU GPS SIAP
+
+        # ==================================================
+        # ✅ ANALISA HASIL GPS — Beri Pesan Sesuai Masalah
+        # ==================================================
+        if loc is None:
+            st.info("⏳ **Mendeteksi lokasi GPS...** Izinkan akses lokasi di pojok atas browser!")
+            st.warning("💡 Buka di luar ruangan / dekat jendela agar sinyal GPS masuk.")
+            st.stop()
+
+        elif isinstance(loc, list):
+            hasil = loc[0]
+
+            # ✅ BERHASIL dapat koordinat
+            if isinstance(hasil, float) and len(loc) >= 2 and loc[1] is not None:
+                u_lat = round(hasil, 6)
+                u_lon = round(loc[1], 6)
+                lokasi_siap = True
+                st.success(f"✅ **Lokasi terdeteksi!**\n📍 {u_lat}, {u_lon}")
+
+            # ❌ Pengguna TIDAK IZINKAN lokasi
+            elif hasil == "DITOLAK_PENGGUNA":
+                st.error("❌ Akses lokasi DITOLAK. Silakan pilih **✍️ Masukkan Koordinat Secara Manual** di atas, atau izinkan lokasi di pengaturan browser.")
+                st.stop()
+
+            # ❌ Tidak dapat sinyal
+            elif hasil == "LOKASI_TIDAK_DITEMUKAN":
+                st.error("📡 Tidak dapat sinyal lokasi. Coba di luar ruangan atau gunakan **Koordinat Manual**.")
+                st.stop()
+
+            # ❌ Terlalu lama
+            elif hasil == "TIMEOUT":
+                st.error("⏱️ Terlalu lama mendeteksi lokasi. Coba lagi nanti atau gunakan **Koordinat Manual**.")
+                st.stop()
+
+            # ❌ Browser tidak dukung
+            elif hasil == "BROWSER_TIDAK_DUKUNG":
+                st.error("❌ Browser tidak mendukung fitur lokasi. Gunakan browser Chrome / Safari.")
+                st.stop()
+
+            # ⚠️ Hasil lain / belum siap
+            else:
+                st.info("⏳ Masih menunggu sinyal lokasi... Tunggu sebentar lagi!")
+                st.stop()
     else:
+        # ✅ Mode Manual
         u_lat = st.number_input("Garis Lintang (Latitude)", value=-6.98, format="%.6f")
         u_lon = st.number_input("Garis Bujur (Longitude)", value=109.13, format="%.6f")
         lokasi_siap = True
 
-    # ⛔ JANGAN LANJUT SEBELUM LOKASI SIAP
+    # ⛔ JANGAN LANJUT SEBELUM LOKASI BENAR-BENAR SIAP
     if not lokasi_siap:
         st.stop()
-
-    # ==================================================
-    # ✅ PROSES KE RUAS JALAN — URUTAN LAT/LON DIPASTIKAN BENAR
-    # ==================================================
-    display_lat, display_lon, is_snapped, closest_feature = u_lat, u_lon, False, None
-
-    if data_jalan and data_jalan.get("features"):
-        # ⚠️ PENTING: Shapely pakai (LON, LAT) — JANGAN TERBALIK!
-        user_point = Point(u_lon, u_lat)
-        min_dist = float('inf')
-        target_f = None
-        for f in data_jalan['features']:
-            jarak = shape(f['geometry']).distance(user_point) * 111.32
-            if jarak < min_dist:
-                min_dist, target_f = jarak, f
-        if min_dist < 0.3 and target_f:
-            p1, _ = nearest_points(shape(target_f['geometry']), user_point)
-            display_lat, display_lon, is_snapped = p1.y, p1.x, True
-
-    id_geo = closest_feature['properties'].get('KML_FOLDER', '-') if closest_feature else "-"
-    data_oto = DATA_ATRIBUT.get(id_geo, {"nama": "DI LUAR JANGKAUAN", "no": "-", "km": "-"})
-
-    daftar_nama = [v['nama'] for v in DATA_ATRIBUT.values()]
-    idx_def = daftar_nama.index(data_oto['nama']) if data_oto['nama'] in daftar_nama else 0
-    ruas_pilih = st.selectbox("Konfirmasi / Pilih Ruas Jalan", options=daftar_nama, index=idx_def)
-    id_final = next((k for k, v in DATA_ATRIBUT.items() if v["nama"] == ruas_pilih), "Jalan Provinsi_1")
-    atr = DATA_ATRIBUT[id_final]
-
-    col_m1, col_m2 = st.columns(2)
-    with col_m1: st.metric("Nama Ruas", atr['nama'])
-    with col_m2: st.metric("Nomor & KM", f"ID {atr['no']} | {atr['km']}")
-
-    # ==================================================
-    # ✅ TAMPIL PETA — SETELAH KOORDINAT PASTI BENAR
-    # ==================================================
-    st.markdown("<div class='map-wrapper'>", unsafe_allow_html=True)
-    tiles = "OpenStreetMap"
-    attr = "OpenStreetMap"
-    if mode_peta == "Satelit":
-        tiles = "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
-        attr = "Google Maps"
-    elif mode_peta == "Gelap":
-        tiles = "CartoDB dark_matter"
-        attr = "CartoDB"
-
-    # 🔍 Zoom dekat langsung ke lokasi
-    zoom_awal = 17 if is_snapped else 16
-
-    m = folium.Map(
-        location=[display_lat, display_lon],  # ⚠️ LAT DULU → LON BELAKANG — JANGAN TERBALIK!
-        zoom_start=zoom_awal,
-        tiles=tiles,
-        attr=attr
-    )
-
-    if data_jalan and data_jalan.get("features"):
-        folium.GeoJson(data_jalan, style_function=lambda x: {'color': '#fbbf24', 'weight': 5, 'opacity': 0.8}).add_to(m)
-
-    folium.Marker(
-        [display_lat, display_lon],
-        popup=f"Lokasi: {display_lat:.6f}, {display_lon:.6f}",
-        icon=folium.Icon(color='orange' if is_snapped else 'red', icon='road', prefix='fa')
-    ).add_to(m)
-
-    # ✅ Kunci TETAP → tidak error duplikasi
-    st_folium(m, width="100%", height=420, key="peta_laporan_utama")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.info(f"📍 Koordinat: **{display_lat:.6f}, {display_lon:.6f}** {'✅ Disesuaikan ke ruas jalan' if is_snapped else ''}")
     with st.container():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.subheader("📝 Isi Laporan Kerusakan")
